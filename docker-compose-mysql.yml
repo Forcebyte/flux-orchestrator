@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8
+    environment:
+      MYSQL_DATABASE: flux_orchestrator
+      MYSQL_USER: flux
+      MYSQL_PASSWORD: flux
+      MYSQL_ROOT_PASSWORD: rootpass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      DB_DRIVER: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: flux
+      DB_PASSWORD: flux
+      DB_NAME: flux_orchestrator
+      PORT: 8080
+    depends_on:
+      - mysql
+
+volumes:
+  mysql_data:
