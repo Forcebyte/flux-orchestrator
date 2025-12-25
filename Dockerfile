@@ -4,6 +4,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY backend ./backend
+COPY tools ./tools
 RUN CGO_ENABLED=0 GOOS=linux go build -o /flux-orchestrator ./backend/cmd/server
 
 # Frontend builder
