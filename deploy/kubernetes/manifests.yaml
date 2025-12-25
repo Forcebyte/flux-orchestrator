@@ -1,0 +1,190 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flux-orchestrator
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flux-orchestrator
+  namespace: flux-orchestrator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: flux-orchestrator
+rules:
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list"]
+- apiGroups: ["kustomize.toolkit.fluxcd.io"]
+  resources: ["kustomizations"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["helm.toolkit.fluxcd.io"]
+  resources: ["helmreleases"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["source.toolkit.fluxcd.io"]
+  resources: ["gitrepositories", "helmrepositories", "buckets", "ocirepositories"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["notification.toolkit.fluxcd.io"]
+  resources: ["alerts", "providers", "receivers"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["image.toolkit.fluxcd.io"]
+  resources: ["imagepolicies", "imagerepositories", "imageupdateautomations"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: flux-orchestrator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flux-orchestrator
+subjects:
+- kind: ServiceAccount
+  name: flux-orchestrator
+  namespace: flux-orchestrator
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: flux-orchestrator-db
+  namespace: flux-orchestrator
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: "changeme"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flux-orchestrator-config
+  namespace: flux-orchestrator
+data:
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  DB_USER: "postgres"
+  DB_NAME: "flux_orchestrator"
+  DB_SSLMODE: "disable"
+  PORT: "8080"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: flux-orchestrator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          value: flux_orchestrator
+        - name: POSTGRES_USER
+          value: postgres
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: flux-orchestrator-db
+              key: POSTGRES_PASSWORD
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgres-data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: flux-orchestrator
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flux-orchestrator
+  namespace: flux-orchestrator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flux-orchestrator
+  template:
+    metadata:
+      labels:
+        app: flux-orchestrator
+    spec:
+      serviceAccountName: flux-orchestrator
+      containers:
+      - name: flux-orchestrator
+        image: flux-orchestrator:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: flux-orchestrator-config
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: flux-orchestrator-config
+              key: DB_PORT
+        - name: DB_USER
+          valueFrom:
+            configMapKeyRef:
+              name: flux-orchestrator-config
+              key: DB_USER
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: flux-orchestrator-config
+              key: DB_NAME
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: flux-orchestrator-db
+              key: POSTGRES_PASSWORD
+        - name: DB_SSLMODE
+          valueFrom:
+            configMapKeyRef:
+              name: flux-orchestrator-config
+              key: DB_SSLMODE
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: flux-orchestrator-config
+              key: PORT
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flux-orchestrator
+  namespace: flux-orchestrator
+spec:
+  selector:
+    app: flux-orchestrator
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: LoadBalancer
