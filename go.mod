@@ -3,6 +3,7 @@ module github.com/Forcebyte/flux-orchestrator
 go 1.23
 
 require (
+	github.com/fernet/fernet-go v0.0.0-20211208181803-9f70042a33ee
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1

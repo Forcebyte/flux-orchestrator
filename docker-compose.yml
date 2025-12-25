@@ -27,6 +27,8 @@ services:
       DB_NAME: flux_orchestrator
       DB_SSLMODE: disable
       PORT: 8080
+      # IMPORTANT: Generate a secure key - see docs/ENCRYPTION.md
+      ENCRYPTION_KEY: "cGxlYXNlLWNoYW5nZS10aGlzLWtleS1zZWUtZG9jcw=="
     depends_on:
       - postgres
 

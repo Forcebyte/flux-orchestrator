@@ -46,6 +46,21 @@ Images are tagged based on the trigger:
 | Commit SHA | `branch-<sha>` | `ghcr.io/forcebyte/flux-orchestrator:main-abc1234` |
 | Version tag | `v1.0.0`, `1.0`, `1` | `ghcr.io/forcebyte/flux-orchestrator:v1.0.0` |
 
+### Pull Request Builds
+
+When a pull request is created or updated, the CI automatically builds a Docker image tagged with `pr-<number>`. This allows you to test changes before merging:
+
+1. Wait for the CI build to complete on your PR
+2. Check the "Image tags summary" in the workflow run for the exact tag
+3. Update your test deployment to use the PR image:
+
+```yaml
+# In your test cluster
+image: ghcr.io/forcebyte/flux-orchestrator:pr-123
+```
+
+**Note:** PR images from forks are not automatically pushed for security reasons. Fork PRs will only build (not push) unless explicitly approved.
+
 ## Multi-Architecture Support
 
 The pipeline builds images for:

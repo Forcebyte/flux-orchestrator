@@ -8,7 +8,8 @@ A comprehensive multi-cluster GitOps management platform for Flux CD, providing 
 - 📊 **Unified Dashboard**: ArgoCD-inspired UI with real-time status of all Flux resources
 - 🔄 **Resource Synchronization**: Trigger reconciliation for individual resources or entire clusters
 - 💾 **Flexible Database Backend**: Support for PostgreSQL and MySQL
-- 🔐 **Secure**: RBAC-enabled with secure kubeconfig storage
+- 🔐 **Secure**: RBAC-enabled with Fernet-encrypted kubeconfig storage
+- 🔒 **Encryption at Rest**: All sensitive kubeconfig data is encrypted using Fernet (AES-128-CBC with HMAC-SHA256)
 - 🚀 **Easy Deployment**: Deploy to a central cluster with Kubernetes manifests
 
 ## Architecture
@@ -62,7 +63,16 @@ The Flux Orchestrator consists of:
      mysql:8
    ```
 
-3. **Start the backend**
+3. **Generate an encryption key**
+   ```bash
+   # Using Python
+   python3 -c "import base64; import os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+   
+   # Or using Go
+   go run ./tools/generate-key/main.go
+   ```
+
+4. **Start the backend**
 
    **For PostgreSQL:**
    ```bash
@@ -74,6 +84,7 @@ The Flux Orchestrator consists of:
    export DB_NAME=flux_orchestrator
    export DB_SSLMODE=disable
    export PORT=8080
+   export ENCRYPTION_KEY="your-generated-key-here"
 
    go run backend/cmd/server/main.go
    ```
@@ -87,11 +98,12 @@ The Flux Orchestrator consists of:
    export DB_PASSWORD=flux
    export DB_NAME=flux_orchestrator
    export PORT=8080
+   export ENCRYPTION_KEY="your-generated-key-here"
 
    go run backend/cmd/server/main.go
    ```
 
-4. **Start the frontend**
+5. **Start the frontend**
    ```bash
    cd frontend
    npm install
@@ -253,7 +265,36 @@ The dashboard provides an overview of all resources across all clusters:
 | `DB_PASSWORD` | Database password | `postgres` |
 | `DB_NAME` | Database name | `flux_orchestrator` |
 | `DB_SSLMODE` | SSL mode (PostgreSQL only) | `disable` |
+| `ENCRYPTION_KEY` | Fernet encryption key for kubeconfigs | **(Required)** |
 | `PORT` | API server port | `8080` |
+| `SCRAPE_IN_CLUSTER` | Enable in-cluster scraping | `false` |
+| `IN_CLUSTER_NAME` | Name for in-cluster configuration | `in-cluster` |
+| `IN_CLUSTER_DESCRIPTION` | Description for in-cluster | `Local cluster...` |
+
+## Security
+
+### Kubeconfig Encryption
+
+All kubeconfig data is encrypted at rest using **Fernet** (AES-128-CBC with HMAC-SHA256) before being stored in the database. This ensures that even with direct database access, the kubeconfig contents cannot be read without the encryption key.
+
+**Setup:**
+1. Generate an encryption key:
+   ```bash
+   python3 -c "import base64; import os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+   ```
+2. Set the `ENCRYPTION_KEY` environment variable
+3. Store the key securely (Kubernetes Secret, secrets manager, etc.)
+
+For more details, see [docs/ENCRYPTION.md](docs/ENCRYPTION.md).
+
+### Best Practices
+
+- 🔑 Never commit the `ENCRYPTION_KEY` to version control
+- 🔐 Rotate encryption keys periodically
+- 🛡️ Limit database access to authorized personnel only
+- 📝 Enable database audit logging
+- 🔒 Use Kubernetes RBAC to restrict access to secrets
+- 🌐 Use TLS/HTTPS for all network communication
 
 ### RBAC Permissions
 

@@ -56,6 +56,17 @@ stringData:
   POSTGRES_PASSWORD: "changeme"
 ---
 apiVersion: v1
+kind: Secret
+metadata:
+  name: flux-orchestrator-encryption
+  namespace: flux-orchestrator
+type: Opaque
+stringData:
+  # IMPORTANT: Generate a new key using: python3 -c "import base64; import os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+  # Or use the Go utility: go run -tags=tools ./tools/generate-key
+  ENCRYPTION_KEY: "CHANGE_ME_GENERATE_A_NEW_KEY_SEE_COMMENT_ABOVE"
+---
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: flux-orchestrator-config
@@ -174,6 +185,11 @@ spec:
             secretKeyRef:
               name: flux-orchestrator-db
               key: POSTGRES_PASSWORD
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: flux-orchestrator-encryption
+              key: ENCRYPTION_KEY
         - name: DB_SSLMODE
           valueFrom:
             configMapKeyRef:

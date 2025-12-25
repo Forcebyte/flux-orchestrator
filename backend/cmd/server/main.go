@@ -10,6 +10,7 @@ import (
 
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/api"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/database"
+	"github.com/Forcebyte/flux-orchestrator/backend/internal/encryption"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/k8s"
 )
 
@@ -26,6 +27,18 @@ func main() {
 		DBName:   getEnv("DB_NAME", "flux_orchestrator"),
 		SSLMode:  getEnv("DB_SSLMODE", "disable"),
 	}
+
+	// Initialize encryption
+	encryptionKey := getEnv("ENCRYPTION_KEY", "")
+	if encryptionKey == "" {
+		log.Fatal("ENCRYPTION_KEY environment variable is required")
+	}
+
+	encryptor, err := encryption.NewEncryptor(encryptionKey)
+	if err != nil {
+		log.Fatalf("Failed to initialize encryptor: %v", err)
+	}
+	log.Println("Encryption initialized successfully")
 
 	// Connect to database
 	db, err := database.New(dbConfig)
@@ -94,16 +107,24 @@ func main() {
 	}
 
 	// Load existing clusters from database
-	rows, err := db.Query("SELECT id, kubeconfig FROM clusters")
+	rows, err := db.Query("SELECT id, kubeconfig FROM clusters WHERE kubeconfig != ''")
 	if err != nil {
 		log.Printf("Warning: Failed to load existing clusters: %v", err)
 	} else {
 		defer rows.Close()
 		for rows.Next() {
-			var id, kubeconfig string
-			if err := rows.Scan(&id, &kubeconfig); err != nil {
+			var id, encryptedKubeconfig string
+			if err := rows.Scan(&id, &encryptedKubeconfig); err != nil {
 				continue
 			}
+
+			// Decrypt kubeconfig
+			kubeconfig, err := encryptor.Decrypt(encryptedKubeconfig)
+			if err != nil {
+				log.Printf("Warning: Failed to decrypt kubeconfig for cluster %s: %v", id, err)
+				continue
+			}
+
 			if err := k8sClient.AddCluster(id, kubeconfig); err != nil {
 				log.Printf("Warning: Failed to add cluster %s: %v", id, err)
 			} else {
@@ -113,7 +134,7 @@ func main() {
 	}
 
 	// Create API server
-	apiServer := api.NewServer(db, k8sClient)
+	apiServer := api.NewServer(db, k8sClient, encryptor)
 
 	// Start background sync worker
 	go syncWorker(db, k8sClient)

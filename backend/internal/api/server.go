@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/database"
+	"github.com/Forcebyte/flux-orchestrator/backend/internal/encryption"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/k8s"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/models"
 	"github.com/google/uuid"
@@ -21,14 +22,16 @@ type Server struct {
 	db        *database.DB
 	k8sClient *k8s.Client
 	router    *mux.Router
+	encryptor *encryption.Encryptor
 }
 
 // NewServer creates a new API server
-func NewServer(db *database.DB, k8sClient *k8s.Client) *Server {
+func NewServer(db *database.DB, k8sClient *k8s.Client, encryptor *encryption.Encryptor) *Server {
 	s := &Server{
 		db:        db,
 		k8sClient: k8sClient,
 		router:    mux.NewRouter(),
+		encryptor: encryptor,
 	}
 	s.routes()
 	return s
@@ -183,11 +186,19 @@ func (s *Server) createCluster(w http.ResponseWriter, r *http.Request) {
 	// Check cluster health
 	status, _ := s.k8sClient.CheckClusterHealth(clusterID)
 
-	// Save to database
-	_, err := s.db.Exec(`
+	// Encrypt kubeconfig before storing
+	encryptedKubeconfig, err := s.encryptor.Encrypt(req.KubeConfig)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to encrypt kubeconfig")
+		log.Printf("Encryption error: %v", err)
+		return
+	}
+
+	// Save to database with encrypted kubeconfig
+	_, err = s.db.Exec(`
 		INSERT INTO clusters (id, name, description, kubeconfig, status)
 		VALUES ($1, $2, $3, $4, $5)
-	`, clusterID, req.Name, req.Description, req.KubeConfig, status)
+	`, clusterID, req.Name, req.Description, encryptedKubeconfig, status)
 
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to save cluster")
@@ -252,6 +263,15 @@ func (s *Server) updateCluster(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusBadRequest, fmt.Sprintf("Failed to connect to cluster: %v", err))
 			return
 		}
+
+		// Encrypt kubeconfig before storing
+		encryptedKubeconfig, err := s.encryptor.Encrypt(req.KubeConfig)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to encrypt kubeconfig")
+			log.Printf("Encryption error: %v", err)
+			return
+		}
+		req.KubeConfig = encryptedKubeconfig
 	}
 
 	// Update database
