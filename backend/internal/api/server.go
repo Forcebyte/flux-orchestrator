@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -108,7 +109,7 @@ func (s *Server) serveFrontend(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer indexFile.Close()
-		http.ServeContent(w, r, "index.html", time.Now(), indexFile.(http.ReadSeeker))
+		http.ServeContent(w, r, "index.html", time.Now(), indexFile.(io.ReadSeeker))
 		return
 	}
 	defer file.Close()
@@ -123,12 +124,12 @@ func (s *Server) serveFrontend(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer indexFile.Close()
-		http.ServeContent(w, r, "index.html", time.Now(), indexFile.(http.ReadSeeker))
+		http.ServeContent(w, r, "index.html", time.Now(), indexFile.(io.ReadSeeker))
 		return
 	}
 
 	// Serve the actual file
-	http.ServeContent(w, r, r.URL.Path, stat.ModTime(), file.(http.ReadSeeker))
+	http.ServeContent(w, r, r.URL.Path, stat.ModTime(), file.(io.ReadSeeker))
 }
 
 // listClusters returns all registered clusters

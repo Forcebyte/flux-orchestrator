@@ -3,14 +3,23 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"log"
-
-	"github.com/Forcebyte/flux-orchestrator/backend/internal/encryption"
 )
 
+func generateKey() (string, error) {
+	var key [32]byte
+	if _, err := rand.Read(key[:]); err != nil {
+		return "", fmt.Errorf("failed to generate random key: %w", err)
+	}
+
+	return base64.URLEncoding.EncodeToString(key[:]), nil
+}
+
 func main() {
-	key, err := encryption.GenerateKey()
+	key, err := generateKey()
 	if err != nil {
 		log.Fatalf("Failed to generate key: %v", err)
 	}
