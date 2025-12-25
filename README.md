@@ -7,7 +7,7 @@ A comprehensive multi-cluster GitOps management platform for Flux CD, providing 
 - 🎯 **Multi-Cluster Management**: Monitor and manage Flux resources across multiple Kubernetes clusters from a single interface
 - 📊 **Unified Dashboard**: ArgoCD-inspired UI with real-time status of all Flux resources
 - 🔄 **Resource Synchronization**: Trigger reconciliation for individual resources or entire clusters
-- 💾 **PostgreSQL Backend**: Persistent storage of cluster configurations and resource states
+- 💾 **Flexible Database Backend**: Support for PostgreSQL and MySQL
 - 🔐 **Secure**: RBAC-enabled with secure kubeconfig storage
 - 🚀 **Easy Deployment**: Deploy to a central cluster with Kubernetes manifests
 
@@ -17,7 +17,7 @@ The Flux Orchestrator consists of:
 
 - **Backend API** (Go): RESTful API server that manages clusters and Flux resources
 - **Frontend UI** (React/TypeScript): Modern web interface for visualization and management
-- **PostgreSQL Database**: Stores cluster configurations and cached resource states
+- **Database**: PostgreSQL or MySQL for storing cluster configurations and cached resource states
 - **Kubernetes Integration**: Direct integration with Kubernetes API for multi-cluster management
 
 ## Quick Start
@@ -25,7 +25,7 @@ The Flux Orchestrator consists of:
 ### Prerequisites
 
 - Kubernetes cluster (central management cluster)
-- PostgreSQL database
+- PostgreSQL or MySQL database
 - Go 1.21+ (for development)
 - Node.js 18+ (for frontend development)
 
@@ -37,7 +37,9 @@ The Flux Orchestrator consists of:
    cd flux-orchestrator
    ```
 
-2. **Start PostgreSQL**
+2. **Start a database**
+
+   **Option A: PostgreSQL**
    ```bash
    docker run -d \
      --name postgres \
@@ -48,14 +50,42 @@ The Flux Orchestrator consists of:
      postgres:15-alpine
    ```
 
-3. **Start the backend**
+   **Option B: MySQL**
    ```bash
+   docker run -d \
+     --name mysql \
+     -e MYSQL_DATABASE=flux_orchestrator \
+     -e MYSQL_USER=flux \
+     -e MYSQL_PASSWORD=flux \
+     -e MYSQL_ROOT_PASSWORD=rootpass \
+     -p 3306:3306 \
+     mysql:8
+   ```
+
+3. **Start the backend**
+
+   **For PostgreSQL:**
+   ```bash
+   export DB_DRIVER=postgres
    export DB_HOST=localhost
    export DB_PORT=5432
    export DB_USER=postgres
    export DB_PASSWORD=postgres
    export DB_NAME=flux_orchestrator
    export DB_SSLMODE=disable
+   export PORT=8080
+
+   go run backend/cmd/server/main.go
+   ```
+
+   **For MySQL:**
+   ```bash
+   export DB_DRIVER=mysql
+   export DB_HOST=localhost
+   export DB_PORT=3306
+   export DB_USER=flux
+   export DB_PASSWORD=flux
+   export DB_NAME=flux_orchestrator
    export PORT=8080
 
    go run backend/cmd/server/main.go
@@ -73,23 +103,87 @@ The Flux Orchestrator consists of:
 
 ### Production Deployment
 
-#### Using Docker
+#### Using Pre-built Docker Image from GitHub Container Registry
 
-1. **Build the Docker image**
-   ```bash
-   docker build -t flux-orchestrator:latest .
-   ```
+The easiest way to deploy is using our pre-built images:
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/forcebyte/flux-orchestrator:latest
+
+# Or use a specific version/branch
+docker pull ghcr.io/forcebyte/flux-orchestrator:main
+```
+
+#### Using Kubernetes Manifests
+
+1. **Update the image and database configuration**
+
+   Edit `deploy/kubernetes/manifests.yaml`:
+   - Update the image to use `ghcr.io/forcebyte/flux-orchestrator:latest`
+   - Configure database settings (PostgreSQL is included by default)
+   - Update database password in the Secret
 
 2. **Deploy to Kubernetes**
    ```bash
    kubectl apply -f deploy/kubernetes/manifests.yaml
    ```
 
+   This will create:
+   - `flux-orchestrator` namespace
+   - ServiceAccount with RBAC permissions
+   - PostgreSQL StatefulSet (or configure your own database)
+   - Flux Orchestrator Deployment
+   - LoadBalancer Service
+
 3. **Access the application**
    ```bash
+   # Via port-forward
    kubectl port-forward -n flux-orchestrator svc/flux-orchestrator 8080:80
+   
+   # Or get the LoadBalancer IP
+   kubectl get svc -n flux-orchestrator flux-orchestrator
    ```
    Open http://localhost:8080 in your browser
+
+#### Using Your Own Database
+
+To use an external PostgreSQL or MySQL database instead of the bundled one:
+
+1. Remove the PostgreSQL StatefulSet from `deploy/kubernetes/manifests.yaml`
+2. Update the ConfigMap with your database connection details:
+   ```yaml
+   apiVersion: v1
+   kind: ConfigMap
+   metadata:
+     name: flux-orchestrator-config
+     namespace: flux-orchestrator
+   data:
+     DB_DRIVER: "postgres"  # or "mysql"
+     DB_HOST: "your-db-host"
+     DB_PORT: "5432"        # or "3306" for MySQL
+     DB_USER: "your-user"
+     DB_NAME: "flux_orchestrator"
+     DB_SSLMODE: "require"  # for PostgreSQL
+     PORT: "8080"
+   ```
+3. Update the Secret with your database password
+
+#### Building Your Own Docker Image
+
+1. **Build the Docker image**
+   ```bash
+   docker build -t flux-orchestrator:latest .
+   ```
+
+2. **Push to your registry**
+   ```bash
+   docker tag flux-orchestrator:latest your-registry/flux-orchestrator:latest
+   docker push your-registry/flux-orchestrator:latest
+   ```
+
+3. **Update Kubernetes manifests**
+   Edit `deploy/kubernetes/manifests.yaml` and change the image reference
 
 ## Usage
 
@@ -152,12 +246,13 @@ The dashboard provides an overview of all resources across all clusters:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DB_HOST` | PostgreSQL host | `localhost` |
-| `DB_PORT` | PostgreSQL port | `5432` |
-| `DB_USER` | PostgreSQL user | `postgres` |
-| `DB_PASSWORD` | PostgreSQL password | `postgres` |
+| `DB_DRIVER` | Database driver (`postgres` or `mysql`) | `postgres` |
+| `DB_HOST` | Database host | `localhost` |
+| `DB_PORT` | Database port | `5432` |
+| `DB_USER` | Database user | `postgres` |
+| `DB_PASSWORD` | Database password | `postgres` |
 | `DB_NAME` | Database name | `flux_orchestrator` |
-| `DB_SSLMODE` | SSL mode for PostgreSQL | `disable` |
+| `DB_SSLMODE` | SSL mode (PostgreSQL only) | `disable` |
 | `PORT` | API server port | `8080` |
 
 ### RBAC Permissions

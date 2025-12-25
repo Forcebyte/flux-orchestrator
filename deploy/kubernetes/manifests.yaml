@@ -61,6 +61,7 @@ metadata:
   name: flux-orchestrator-config
   namespace: flux-orchestrator
 data:
+  DB_DRIVER: "postgres"
   DB_HOST: "postgres"
   DB_PORT: "5432"
   DB_USER: "postgres"
@@ -135,11 +136,16 @@ spec:
       serviceAccountName: flux-orchestrator
       containers:
       - name: flux-orchestrator
-        image: flux-orchestrator:latest
-        imagePullPolicy: IfNotPresent
+        image: ghcr.io/forcebyte/flux-orchestrator:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8080
         env:
+        - name: DB_DRIVER
+          valueFrom:
+            configMapKeyRef:
+              name: flux-orchestrator-config
+              key: DB_DRIVER
         - name: DB_HOST
           valueFrom:
             configMapKeyRef:

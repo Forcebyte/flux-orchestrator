@@ -7,7 +7,7 @@ Get Flux Orchestrator up and running in minutes!
 ### Prerequisites
 - Go 1.21+
 - Node.js 18+
-- Docker (for PostgreSQL)
+- Docker (for database)
 
 ### Steps
 
@@ -17,7 +17,9 @@ Get Flux Orchestrator up and running in minutes!
    cd flux-orchestrator
    ```
 
-2. **Start PostgreSQL**
+2. **Start a database**
+
+   **Using PostgreSQL:**
    ```bash
    docker run -d \
      --name flux-orchestrator-postgres \
@@ -28,9 +30,36 @@ Get Flux Orchestrator up and running in minutes!
      postgres:15-alpine
    ```
 
-3. **Start the backend** (in one terminal)
+   **Using MySQL:**
    ```bash
+   docker run -d \
+     --name flux-orchestrator-mysql \
+     -e MYSQL_DATABASE=flux_orchestrator \
+     -e MYSQL_USER=flux \
+     -e MYSQL_PASSWORD=flux \
+     -e MYSQL_ROOT_PASSWORD=rootpass \
+     -p 3306:3306 \
+     mysql:8
+   ```
+
+3. **Start the backend** (in one terminal)
+
+   **For PostgreSQL:**
+   ```bash
+   export DB_DRIVER=postgres
    make backend-dev
+   ```
+
+   **For MySQL:**
+   ```bash
+   export DB_DRIVER=mysql
+   export DB_HOST=localhost
+   export DB_PORT=3306
+   export DB_USER=flux
+   export DB_PASSWORD=flux
+   export DB_NAME=flux_orchestrator
+   export PORT=8080
+   go run backend/cmd/server/main.go
    ```
 
 4. **Start the frontend** (in another terminal)
@@ -59,8 +88,15 @@ Get Flux Orchestrator up and running in minutes!
    ```
 
 2. **Start services**
+
+   **With PostgreSQL (default):**
    ```bash
    docker-compose up -d
+   ```
+
+   **With MySQL:**
+   ```bash
+   docker-compose -f docker-compose-mysql.yml up -d
    ```
 
 3. **Access the UI**
@@ -74,13 +110,25 @@ Get Flux Orchestrator up and running in minutes!
 
 ### Steps
 
-1. **Build and push image**
+1. **Use pre-built image from GitHub Container Registry**
+   
+   The manifests are already configured to use `ghcr.io/forcebyte/flux-orchestrator:latest`:
+
+   ```bash
+   kubectl apply -f deploy/kubernetes/manifests.yaml
+   ```
+
+   **Or build and push your own image:**
    ```bash
    # Build
    docker build -t your-registry/flux-orchestrator:latest .
    
    # Push to your registry
    docker push your-registry/flux-orchestrator:latest
+   
+   # Update the image in deploy/kubernetes/manifests.yaml
+   # Then apply
+   kubectl apply -f deploy/kubernetes/manifests.yaml
    ```
 
 2. **Update image in manifests**

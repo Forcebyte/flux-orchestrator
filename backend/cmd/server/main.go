@@ -18,6 +18,7 @@ func main() {
 
 	// Load database configuration from environment
 	dbConfig := database.Config{
+		Driver:   getEnv("DB_DRIVER", "postgres"),
 		Host:     getEnv("DB_HOST", "localhost"),
 		Port:     getEnvInt("DB_PORT", 5432),
 		User:     getEnv("DB_USER", "postgres"),
