@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { clusterApi, resourceApi } from '../api';
-import { Cluster, FluxResource } from '../types';
+import { clusterApi, resourceApi, fluxApi } from '../api';
+import { Cluster, FluxResource, FluxStats, FluxResourceChild } from '../types';
 import { useToast } from '../hooks/useToast';
 import Toast from './Toast';
 import '../styles/ClusterDetail.css';
@@ -10,10 +10,14 @@ const ClusterDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [cluster, setCluster] = useState<Cluster | null>(null);
   const [resources, setResources] = useState<FluxResource[]>([]);
+  const [fluxStats, setFluxStats] = useState<FluxStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>('all');
   const [expandedResources, setExpandedResources] = useState<Set<string>>(new Set());
+  const [resourceChildren, setResourceChildren] = useState<Record<string, FluxResourceChild[]>>({});
+  const [loadingChildren, setLoadingChildren] = useState<Set<string>>(new Set());
   const [isReconciling, setIsReconciling] = useState<Set<string>>(new Set());
+  const [isSuspending, setIsSuspending] = useState<Set<string>>(new Set());
   const { toasts, removeToast, success, error, info } = useToast();
 
   useEffect(() => {
@@ -25,12 +29,16 @@ const ClusterDetail: React.FC = () => {
   const loadData = async () => {
     if (!id) return;
     try {
-      const [clusterRes, resourcesRes] = await Promise.all([
+      const [clusterRes, resourcesRes, statsRes] = await Promise.all([
         clusterApi.get(id),
         resourceApi.listByCluster(id),
+        fluxApi.getStats(id).catch(() => ({ data: null })),
       ]);
       setCluster(clusterRes.data);
       setResources(resourcesRes.data);
+      if (statsRes.data) {
+        setFluxStats(statsRes.data);
+      }
     } catch (err) {
       console.error('Failed to load data:', err);
       error('Failed to load cluster data');
@@ -39,15 +47,32 @@ const ClusterDetail: React.FC = () => {
     }
   };
 
+  const loadResourceChildren = async (resource: FluxResource) => {
+    if (resourceChildren[resource.id]) return;
+    
+    setLoadingChildren((prev) => new Set(prev).add(resource.id));
+    try {
+      const res = await fluxApi.getChildren(resource.cluster_id, resource.kind, resource.namespace, resource.name);
+      setResourceChildren((prev) => ({
+        ...prev,
+        [resource.id]: res.data.resources,
+      }));
+    } catch (err) {
+      console.error('Failed to load children:', err);
+      // Don't show error toast as this is expected for some resources
+    } finally {
+      setLoadingChildren((prev) => {
+        const next = new Set(prev);
+        next.delete(resource.id);
+        return next;
+      });
+    }
+  };
+
   const handleReconcile = async (resource: FluxResource) => {
     setIsReconciling((prev) => new Set(prev).add(resource.id));
     try {
-      await resourceApi.reconcile({
-        cluster_id: resource.cluster_id,
-        kind: resource.kind,
-        name: resource.name,
-        namespace: resource.namespace,
-      });
+      await fluxApi.reconcile(resource.cluster_id, resource.kind, resource.namespace, resource.name);
       success(`Reconciliation triggered for ${resource.name}`);
       setTimeout(loadData, 2000);
     } catch (err) {
@@ -55,6 +80,42 @@ const ClusterDetail: React.FC = () => {
       error(`Failed to trigger reconciliation for ${resource.name}`);
     } finally {
       setIsReconciling((prev) => {
+        const next = new Set(prev);
+        next.delete(resource.id);
+        return next;
+      });
+    }
+  };
+
+  const handleSuspend = async (resource: FluxResource) => {
+    setIsSuspending((prev) => new Set(prev).add(resource.id));
+    try {
+      await fluxApi.suspend(resource.cluster_id, resource.kind, resource.namespace, resource.name);
+      success(`${resource.name} suspended`);
+      setTimeout(loadData, 1000);
+    } catch (err) {
+      console.error('Failed to suspend:', err);
+      error(`Failed to suspend ${resource.name}`);
+    } finally {
+      setIsSuspending((prev) => {
+        const next = new Set(prev);
+        next.delete(resource.id);
+        return next;
+      });
+    }
+  };
+
+  const handleResume = async (resource: FluxResource) => {
+    setIsSuspending((prev) => new Set(prev).add(resource.id));
+    try {
+      await fluxApi.resume(resource.cluster_id, resource.kind, resource.namespace, resource.name);
+      success(`${resource.name} resumed`);
+      setTimeout(loadData, 1000);
+    } catch (err) {
+      console.error('Failed to resume:', err);
+      error(`Failed to resume ${resource.name}`);
+    } finally {
+      setIsSuspending((prev) => {
         const next = new Set(prev);
         next.delete(resource.id);
         return next;
@@ -74,16 +135,32 @@ const ClusterDetail: React.FC = () => {
     }
   };
 
-  const toggleExpanded = (resourceId: string) => {
+  const toggleExpanded = async (resource: FluxResource) => {
+    const isExpanding = !expandedResources.has(resource.id);
+    
     setExpandedResources((prev) => {
       const next = new Set(prev);
-      if (next.has(resourceId)) {
-        next.delete(resourceId);
+      if (next.has(resource.id)) {
+        next.delete(resource.id);
       } else {
-        next.add(resourceId);
+        next.add(resource.id);
       }
       return next;
     });
+
+    // Load children if expanding and haven't loaded yet
+    if (isExpanding && (resource.kind === 'Kustomization' || resource.kind === 'HelmRelease')) {
+      loadResourceChildren(resource);
+    }
+  };
+
+  const isSuspended = (resource: FluxResource): boolean => {
+    try {
+      const metadata = resource.metadata ? JSON.parse(resource.metadata) : null;
+      return metadata?.spec?.suspend === true;
+    } catch {
+      return false;
+    }
   };
 
   const filteredResources = activeTab === 'all'
@@ -154,7 +231,41 @@ const ClusterDetail: React.FC = () => {
       </div>
 
       <div className="content">
-        {/* Stats Cards */}
+        {/* Flux Stats Cards */}
+        {fluxStats && (
+          <div className="stats-section">
+            <h3 className="stats-title">Flux Statistics</h3>
+            <div className="stats-grid flux-stats">
+              {Object.entries(fluxStats).map(([key, stats]) => (
+                <div key={key} className="stat-card flux-stat-card">
+                  <div className="stat-header">
+                    <h4>{key.replace(/([A-Z])/g, ' $1').trim()}</h4>
+                  </div>
+                  <div className="stat-breakdown">
+                    <div className="stat-item">
+                      <span className="stat-label">Total</span>
+                      <span className="stat-number">{stats.total}</span>
+                    </div>
+                    <div className="stat-item stat-ready">
+                      <span className="stat-label">Ready</span>
+                      <span className="stat-number">{stats.ready}</span>
+                    </div>
+                    <div className="stat-item stat-notready">
+                      <span className="stat-label">Not Ready</span>
+                      <span className="stat-number">{stats.notReady}</span>
+                    </div>
+                    <div className="stat-item stat-suspended">
+                      <span className="stat-label">Suspended</span>
+                      <span className="stat-number">{stats.suspended}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Summary Stats Cards */}
         <div className="stats-grid">
           <div className="stat-card">
             <div className="stat-icon stat-icon-total">📊</div>
@@ -247,6 +358,11 @@ const ClusterDetail: React.FC = () => {
                         {groupResources.map((resource) => {
                           const isExpanded = expandedResources.has(resource.id);
                           const isReconcilingNow = isReconciling.has(resource.id);
+                          const isSuspendingNow = isSuspending.has(resource.id);
+                          const suspended = isSuspended(resource);
+                          const children = resourceChildren[resource.id];
+                          const childrenLoading = loadingChildren.has(resource.id);
+                          
                           let metadata;
                           try {
                             metadata = resource.metadata ? JSON.parse(resource.metadata) : null;
@@ -257,16 +373,19 @@ const ClusterDetail: React.FC = () => {
                           return (
                             <div
                               key={resource.id}
-                              className={`resource-item ${isExpanded ? 'expanded' : ''}`}
+                              className={`resource-item ${isExpanded ? 'expanded' : ''} ${suspended ? 'suspended' : ''}`}
                             >
                               <div
                                 className="resource-item-header"
-                                onClick={() => toggleExpanded(resource.id)}
+                                onClick={() => toggleExpanded(resource)}
                               >
                                 <div className="resource-item-main">
                                   <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
                                   <div className="resource-item-info">
-                                    <div className="resource-name">{resource.name}</div>
+                                    <div className="resource-name">
+                                      {resource.name}
+                                      {suspended && <span className="suspended-badge">⏸ Suspended</span>}
+                                    </div>
                                     <div className="resource-meta">
                                       <span className={`status-dot status-${resource.status.toLowerCase()}`}></span>
                                       <span className="status-text">{resource.status}</span>
@@ -282,16 +401,34 @@ const ClusterDetail: React.FC = () => {
                                     </div>
                                   </div>
                                 </div>
-                                <button
-                                  className={`btn btn-sm btn-primary ${isReconcilingNow ? 'btn-loading' : ''}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleReconcile(resource);
-                                  }}
-                                  disabled={isReconcilingNow}
-                                >
-                                  {isReconcilingNow ? 'Reconciling...' : 'Reconcile'}
-                                </button>
+                                <div className="resource-actions" onClick={(e) => e.stopPropagation()}>
+                                  {suspended ? (
+                                    <button
+                                      className={`btn btn-sm btn-success ${isSuspendingNow ? 'btn-loading' : ''}`}
+                                      onClick={() => handleResume(resource)}
+                                      disabled={isSuspendingNow}
+                                    >
+                                      {isSuspendingNow ? 'Resuming...' : '▶ Resume'}
+                                    </button>
+                                  ) : (
+                                    <>
+                                      <button
+                                        className={`btn btn-sm btn-primary ${isReconcilingNow ? 'btn-loading' : ''}`}
+                                        onClick={() => handleReconcile(resource)}
+                                        disabled={isReconcilingNow}
+                                      >
+                                        {isReconcilingNow ? 'Reconciling...' : '↻ Reconcile'}
+                                      </button>
+                                      <button
+                                        className={`btn btn-sm btn-warning ${isSuspendingNow ? 'btn-loading' : ''}`}
+                                        onClick={() => handleSuspend(resource)}
+                                        disabled={isSuspendingNow}
+                                      >
+                                        {isSuspendingNow ? 'Suspending...' : '⏸ Suspend'}
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
                               </div>
 
                               {isExpanded && (
@@ -300,6 +437,38 @@ const ClusterDetail: React.FC = () => {
                                     <div className="detail-section">
                                       <label>Status Message:</label>
                                       <div className="detail-value message-box">{resource.message}</div>
+                                    </div>
+                                  )}
+
+                                  {/* Show resources created by Flux */}
+                                  {(resource.kind === 'Kustomization' || resource.kind === 'HelmRelease') && (
+                                    <div className="detail-section">
+                                      <label>Resources Created:</label>
+                                      {childrenLoading ? (
+                                        <div className="detail-value">Loading...</div>
+                                      ) : children && children.length > 0 ? (
+                                        <div className="children-list">
+                                          <div className="children-count">{children.length} resources</div>
+                                          <ul className="children-items">
+                                            {children.slice(0, 10).map((child, idx) => (
+                                              <li key={idx} className="child-item">
+                                                <span className="child-icon">📄</span>
+                                                <span className="child-id">{child.id}</span>
+                                                {child.version && (
+                                                  <span className="child-version">v{child.version}</span>
+                                                )}
+                                              </li>
+                                            ))}
+                                            {children.length > 10 && (
+                                              <li className="child-item-more">
+                                                + {children.length - 10} more resources
+                                              </li>
+                                            )}
+                                          </ul>
+                                        </div>
+                                      ) : (
+                                        <div className="detail-value">No inventory data available</div>
+                                      )}
                                     </div>
                                   )}
 
@@ -324,7 +493,7 @@ const ClusterDetail: React.FC = () => {
 
                                   {metadata && (
                                     <div className="detail-section">
-                                      <label>Metadata:</label>
+                                      <label>Full Resource Spec:</label>
                                       <pre className="detail-value metadata-box">
                                         {JSON.stringify(metadata, null, 2)}
                                       </pre>

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Cluster, FluxResource, ReconcileRequest } from './types';
+import { Cluster, FluxResource, ReconcileRequest, FluxStats, FluxResourceChild } from './types';
 
 const API_BASE = '/api/v1';
 
@@ -24,6 +24,20 @@ export const resourceApi = {
   listByCluster: (clusterId: string) => api.get<FluxResource[]>(`/clusters/${clusterId}/resources`),
   get: (id: string) => api.get<FluxResource>(`/resources/${id}`),
   reconcile: (data: ReconcileRequest) => api.post('/resources/reconcile', data),
+};
+
+export const fluxApi = {
+  getStats: (clusterId: string) => api.get<FluxStats>(`/clusters/${clusterId}/flux/stats`),
+  getResource: (clusterId: string, kind: string, namespace: string, name: string) =>
+    api.get<FluxResource>(`/clusters/${clusterId}/flux/${kind}/${namespace}/${name}`),
+  reconcile: (clusterId: string, kind: string, namespace: string, name: string) =>
+    api.post(`/clusters/${clusterId}/flux/${kind}/${namespace}/${name}/reconcile`),
+  suspend: (clusterId: string, kind: string, namespace: string, name: string) =>
+    api.post(`/clusters/${clusterId}/flux/${kind}/${namespace}/${name}/suspend`),
+  resume: (clusterId: string, kind: string, namespace: string, name: string) =>
+    api.post(`/clusters/${clusterId}/flux/${kind}/${namespace}/${name}/resume`),
+  getChildren: (clusterId: string, kind: string, namespace: string, name: string) =>
+    api.get<{ resources: FluxResourceChild[]; count: number }>(`/clusters/${clusterId}/flux/${kind}/${namespace}/${name}/resources`),
 };
 
 export default api;

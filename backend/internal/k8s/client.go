@@ -279,6 +279,195 @@ func (c *Client) getGVRForKind(kind string) (schema.GroupVersionResource, error)
 	}
 }
 
+// SuspendResource suspends reconciliation for a Flux resource
+func (c *Client) SuspendResource(ctx context.Context, clusterID, kind, namespace, name string) error {
+	return c.setSuspended(ctx, clusterID, kind, namespace, name, true)
+}
+
+// ResumeResource resumes reconciliation for a Flux resource
+func (c *Client) ResumeResource(ctx context.Context, clusterID, kind, namespace, name string) error {
+	return c.setSuspended(ctx, clusterID, kind, namespace, name, false)
+}
+
+// setSuspended sets the suspended field on a Flux resource
+func (c *Client) setSuspended(ctx context.Context, clusterID, kind, namespace, name string, suspended bool) error {
+	client, err := c.GetClient(clusterID)
+	if err != nil {
+		return err
+	}
+
+	gvr, err := c.getGVRForKind(kind)
+	if err != nil {
+		return err
+	}
+
+	// Get the resource
+	resource, err := client.Resource(gvr).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get resource: %w", err)
+	}
+
+	// Set suspended field
+	if err := unstructured.SetNestedField(resource.Object, suspended, "spec", "suspend"); err != nil {
+		return fmt.Errorf("failed to set suspend field: %w", err)
+	}
+
+	// Update the resource
+	_, err = client.Resource(gvr).Namespace(namespace).Update(ctx, resource, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update resource: %w", err)
+	}
+
+	return nil
+}
+
+// GetResourcesCreatedByFlux gets all resources created by a specific Flux resource
+func (c *Client) GetResourcesCreatedByFlux(ctx context.Context, clusterID, kind, namespace, name string) ([]map[string]interface{}, error) {
+	client, err := c.GetClient(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	gvr, err := c.getGVRForKind(kind)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the Flux resource
+	fluxResource, err := client.Resource(gvr).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get flux resource: %w", err)
+	}
+
+	// Get the inventory from status
+	inventory, found, err := unstructured.NestedSlice(fluxResource.Object, "status", "inventory", "entries")
+	if err != nil || !found {
+		return []map[string]interface{}{}, nil
+	}
+
+	// Fetch details for each resource in inventory
+	resources := []map[string]interface{}{}
+	for _, entry := range inventory {
+		entryMap, ok := entry.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Parse inventory entry format: "<id>_<namespace>_<name>"
+		id, _, _ := unstructured.NestedString(entryMap, "id")
+		v, _, _ := unstructured.NestedString(entryMap, "v")
+
+		resourceInfo := map[string]interface{}{
+			"id":      id,
+			"version": v,
+		}
+
+		// Try to fetch the actual resource
+		// Inventory format is typically: namespace_name_group_kind
+		// We'll try to get more details if possible
+		resources = append(resources, resourceInfo)
+	}
+
+	return resources, nil
+}
+
+// GetFluxStats gets statistics about Flux resources in a cluster
+func (c *Client) GetFluxStats(clusterID string) (map[string]interface{}, error) {
+	client, err := c.GetClient(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx := context.Background()
+	stats := map[string]interface{}{
+		"kustomizations":    map[string]int{"total": 0, "ready": 0, "notReady": 0, "suspended": 0},
+		"helmReleases":      map[string]int{"total": 0, "ready": 0, "notReady": 0, "suspended": 0},
+		"gitRepositories":   map[string]int{"total": 0, "ready": 0, "notReady": 0, "suspended": 0},
+		"helmRepositories":  map[string]int{"total": 0, "ready": 0, "notReady": 0, "suspended": 0},
+	}
+
+	fluxGVRs := []struct {
+		gvr      schema.GroupVersionResource
+		statsKey string
+	}{
+		{
+			gvr: schema.GroupVersionResource{
+				Group:    "kustomize.toolkit.fluxcd.io",
+				Version:  "v1",
+				Resource: "kustomizations",
+			},
+			statsKey: "kustomizations",
+		},
+		{
+			gvr: schema.GroupVersionResource{
+				Group:    "helm.toolkit.fluxcd.io",
+				Version:  "v2",
+				Resource: "helmreleases",
+			},
+			statsKey: "helmReleases",
+		},
+		{
+			gvr: schema.GroupVersionResource{
+				Group:    "source.toolkit.fluxcd.io",
+				Version:  "v1",
+				Resource: "gitrepositories",
+			},
+			statsKey: "gitRepositories",
+		},
+		{
+			gvr: schema.GroupVersionResource{
+				Group:    "source.toolkit.fluxcd.io",
+				Version:  "v1",
+				Resource: "helmrepositories",
+			},
+			statsKey: "helmRepositories",
+		},
+	}
+
+	for _, item := range fluxGVRs {
+		list, err := client.Resource(item.gvr).Namespace("").List(ctx, metav1.ListOptions{})
+		if err != nil {
+			continue
+		}
+
+		resourceStats := stats[item.statsKey].(map[string]int)
+		resourceStats["total"] = len(list.Items)
+
+		for _, obj := range list.Items {
+			// Check if suspended
+			suspended, _, _ := unstructured.NestedBool(obj.Object, "spec", "suspend")
+			if suspended {
+				resourceStats["suspended"]++
+				continue
+			}
+
+			// Check Ready condition
+			conditions, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
+			if err == nil && found && len(conditions) > 0 {
+				for _, cond := range conditions {
+					condMap, ok := cond.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					condType, _, _ := unstructured.NestedString(condMap, "type")
+					condStatus, _, _ := unstructured.NestedString(condMap, "status")
+
+					if condType == "Ready" {
+						if condStatus == "True" {
+							resourceStats["ready"]++
+						} else {
+							resourceStats["notReady"]++
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return stats, nil
+}
+
 // GetInClusterConfig returns the in-cluster config
 func GetInClusterConfig() (*rest.Config, error) {
 	return rest.InClusterConfig()

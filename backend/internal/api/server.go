@@ -56,6 +56,12 @@ func (s *Server) routes() {
 
 	// Flux resources
 	api.HandleFunc("/clusters/{id}/resources", s.listClusterResources).Methods("GET", "OPTIONS")
+	api.HandleFunc("/clusters/{id}/flux/stats", s.getFluxStats).Methods("GET", "OPTIONS")
+	api.HandleFunc("/clusters/{id}/flux/{kind}/{namespace}/{name}", s.getFluxResource).Methods("GET", "OPTIONS")
+	api.HandleFunc("/clusters/{id}/flux/{kind}/{namespace}/{name}/reconcile", s.reconcileFluxResource).Methods("POST", "OPTIONS")
+	api.HandleFunc("/clusters/{id}/flux/{kind}/{namespace}/{name}/suspend", s.suspendFluxResource).Methods("POST", "OPTIONS")
+	api.HandleFunc("/clusters/{id}/flux/{kind}/{namespace}/{name}/resume", s.resumeFluxResource).Methods("POST", "OPTIONS")
+	api.HandleFunc("/clusters/{id}/flux/{kind}/{namespace}/{name}/resources", s.getFluxResourceChildren).Methods("GET", "OPTIONS")
 	api.HandleFunc("/resources", s.listAllResources).Methods("GET", "OPTIONS")
 	api.HandleFunc("/resources/{id}", s.getResource).Methods("GET", "OPTIONS")
 	api.HandleFunc("/resources/reconcile", s.reconcileResource).Methods("POST", "OPTIONS")
@@ -485,6 +491,120 @@ func (s *Server) reconcileResource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, map[string]string{"message": "Reconciliation triggered"})
+}
+
+// getFluxStats returns statistics about Flux resources in a cluster
+func (s *Server) getFluxStats(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	clusterID := vars["id"]
+
+	stats, err := s.k8sClient.GetFluxStats(clusterID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get stats: %v", err))
+		return
+	}
+
+	respondJSON(w, http.StatusOK, stats)
+}
+
+// getFluxResource returns details of a specific Flux resource
+func (s *Server) getFluxResource(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	clusterID := vars["id"]
+	kind := vars["kind"]
+	namespace := vars["namespace"]
+	name := vars["name"]
+
+	resources, err := s.k8sClient.GetFluxResources(clusterID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get resources: %v", err))
+		return
+	}
+
+	// Find the matching resource
+	for _, res := range resources {
+		if res.Kind == kind && res.Namespace == namespace && res.Name == name {
+			respondJSON(w, http.StatusOK, res)
+			return
+		}
+	}
+
+	respondError(w, http.StatusNotFound, "Resource not found")
+}
+
+// reconcileFluxResource triggers reconciliation for a Flux resource
+func (s *Server) reconcileFluxResource(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	clusterID := vars["id"]
+	kind := vars["kind"]
+	namespace := vars["namespace"]
+	name := vars["name"]
+
+	ctx := context.Background()
+	err := s.k8sClient.ReconcileResource(ctx, clusterID, kind, namespace, name)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to reconcile: %v", err))
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": "Reconciliation triggered"})
+}
+
+// suspendFluxResource suspends reconciliation for a Flux resource
+func (s *Server) suspendFluxResource(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	clusterID := vars["id"]
+	kind := vars["kind"]
+	namespace := vars["namespace"]
+	name := vars["name"]
+
+	ctx := context.Background()
+	err := s.k8sClient.SuspendResource(ctx, clusterID, kind, namespace, name)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to suspend: %v", err))
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": "Resource suspended"})
+}
+
+// resumeFluxResource resumes reconciliation for a Flux resource
+func (s *Server) resumeFluxResource(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	clusterID := vars["id"]
+	kind := vars["kind"]
+	namespace := vars["namespace"]
+	name := vars["name"]
+
+	ctx := context.Background()
+	err := s.k8sClient.ResumeResource(ctx, clusterID, kind, namespace, name)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to resume: %v", err))
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": "Resource resumed"})
+}
+
+// getFluxResourceChildren returns resources created by a Flux resource
+func (s *Server) getFluxResourceChildren(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	clusterID := vars["id"]
+	kind := vars["kind"]
+	namespace := vars["namespace"]
+	name := vars["name"]
+
+	ctx := context.Background()
+	resources, err := s.k8sClient.GetResourcesCreatedByFlux(ctx, clusterID, kind, namespace, name)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get resources: %v", err))
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"resources": resources,
+		"count":     len(resources),
+	})
 }
 
 // respondJSON writes a JSON response

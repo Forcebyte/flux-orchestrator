@@ -21,9 +21,29 @@ export interface FluxResource {
   metadata?: string;
 }
 
+export interface FluxStats {
+  kustomizations: ResourceStats;
+  helmReleases: ResourceStats;
+  gitRepositories: ResourceStats;
+  helmRepositories: ResourceStats;
+}
+
+export interface ResourceStats {
+  total: number;
+  ready: number;
+  notReady: number;
+  suspended: number;
+}
+
+export interface FluxResourceChild {
+  id: string;
+  version: string;
+}
+
 export interface ReconcileRequest {
   cluster_id: string;
   kind: string;
   name: string;
   namespace: string;
 }
+
