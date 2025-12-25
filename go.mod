@@ -1,6 +1,6 @@
 module github.com/Forcebyte/flux-orchestrator
 
-go 1.24.11
+go 1.23
 
 require (
 	github.com/go-sql-driver/mysql v1.9.3
