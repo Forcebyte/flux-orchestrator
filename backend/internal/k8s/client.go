@@ -43,6 +43,22 @@ func (c *Client) AddCluster(clusterID, kubeconfig string) error {
 	return nil
 }
 
+// AddInClusterConfig adds a cluster client using in-cluster configuration
+func (c *Client) AddInClusterConfig(clusterID string) error {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get in-cluster config: %w", err)
+	}
+
+	client, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("failed to create dynamic client: %w", err)
+	}
+
+	c.clients[clusterID] = client
+	return nil
+}
+
 // GetClient returns the Kubernetes client for a cluster
 func (c *Client) GetClient(clusterID string) (dynamic.Interface, error) {
 	client, ok := c.clients[clusterID]

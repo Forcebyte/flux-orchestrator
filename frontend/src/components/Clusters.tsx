@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { clusterApi } from '../api';
 import { Cluster } from '../types';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '../hooks/useToast';
+import Toast from './Toast';
 
 const Clusters: React.FC = () => {
   const [clusters, setClusters] = useState<Cluster[]>([]);
@@ -13,6 +15,7 @@ const Clusters: React.FC = () => {
     kubeconfig: '',
   });
   const navigate = useNavigate();
+  const { toasts, removeToast, success, error, info } = useToast();
 
   useEffect(() => {
     loadClusters();
@@ -22,8 +25,9 @@ const Clusters: React.FC = () => {
     try {
       const response = await clusterApi.list();
       setClusters(response.data);
-    } catch (error) {
-      console.error('Failed to load clusters:', error);
+    } catch (err) {
+      console.error('Failed to load clusters:', err);
+      error('Failed to load clusters');
     } finally {
       setLoading(false);
     }
@@ -35,30 +39,34 @@ const Clusters: React.FC = () => {
       await clusterApi.create(formData);
       setShowModal(false);
       setFormData({ name: '', description: '', kubeconfig: '' });
+      success(`Cluster "${formData.name}" created successfully`);
       loadClusters();
-    } catch (error) {
-      console.error('Failed to create cluster:', error);
-      alert('Failed to create cluster. Please check your kubeconfig.');
+    } catch (err) {
+      console.error('Failed to create cluster:', err);
+      error('Failed to create cluster. Please check your kubeconfig.');
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this cluster?')) return;
+    const cluster = clusters.find(c => c.id === id);
+    if (!confirm(`Are you sure you want to delete cluster "${cluster?.name}"?`)) return;
     try {
       await clusterApi.delete(id);
+      success('Cluster deleted successfully');
       loadClusters();
-    } catch (error) {
-      console.error('Failed to delete cluster:', error);
+    } catch (err) {
+      console.error('Failed to delete cluster:', err);
+      error('Failed to delete cluster');
     }
   };
 
   const handleSync = async (id: string) => {
     try {
       await clusterApi.syncResources(id);
-      alert('Sync triggered successfully');
-    } catch (error) {
-      console.error('Failed to sync cluster:', error);
-      alert('Failed to sync cluster');
+      info('Sync triggered successfully');
+    } catch (err) {
+      console.error('Failed to sync cluster:', err);
+      error('Failed to sync cluster');
     }
   };
 
@@ -68,6 +76,8 @@ const Clusters: React.FC = () => {
 
   return (
     <div>
+      <Toast toasts={toasts} removeToast={removeToast} />
+      
       <div className="header">
         <h2>Clusters</h2>
         <div className="header-actions">

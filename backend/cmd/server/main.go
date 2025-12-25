@@ -42,6 +42,57 @@ func main() {
 	// Create Kubernetes client
 	k8sClient := k8s.NewClient()
 
+	// Check if we should scrape the cluster we're running in
+	scrapeInCluster := getEnv("SCRAPE_IN_CLUSTER", "false") == "true"
+	inClusterName := getEnv("IN_CLUSTER_NAME", "in-cluster")
+	inClusterDesc := getEnv("IN_CLUSTER_DESCRIPTION", "Local cluster where Flux Orchestrator is deployed")
+
+	if scrapeInCluster {
+		log.Println("SCRAPE_IN_CLUSTER enabled - attempting to register in-cluster configuration")
+		
+		// Check if in-cluster config already exists
+		var existingID string
+		err := db.QueryRow("SELECT id FROM clusters WHERE name = $1", inClusterName).Scan(&existingID)
+		
+		if err != nil && err.Error() != "sql: no rows in result set" {
+			log.Printf("Warning: Failed to check for existing in-cluster config: %v", err)
+		} else if existingID == "" {
+			// Register in-cluster configuration
+			inClusterID := "in-cluster"
+			
+			// Use empty string to signal in-cluster config to k8s client
+			if err := k8sClient.AddInClusterConfig(inClusterID); err != nil {
+				log.Printf("Warning: Failed to add in-cluster configuration: %v", err)
+			} else {
+				// Check health before saving
+				status, healthErr := k8sClient.CheckClusterHealth(inClusterID)
+				if healthErr != nil {
+					log.Printf("Warning: In-cluster health check failed: %v", healthErr)
+					status = "unhealthy"
+				}
+				
+				// Save to database with empty kubeconfig (indicates in-cluster)
+				_, err = db.Exec(`
+					INSERT INTO clusters (id, name, description, kubeconfig, status, created_at, updated_at)
+					VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+				`, inClusterID, inClusterName, inClusterDesc, "", status)
+				
+				if err != nil {
+					log.Printf("Warning: Failed to save in-cluster configuration to database: %v", err)
+				} else {
+					log.Printf("Successfully registered in-cluster configuration as '%s'", inClusterName)
+				}
+			}
+		} else {
+			// In-cluster already exists, just ensure it's loaded
+			if err := k8sClient.AddInClusterConfig(existingID); err != nil {
+				log.Printf("Warning: Failed to reload in-cluster configuration: %v", err)
+			} else {
+				log.Printf("In-cluster configuration already registered with ID: %s", existingID)
+			}
+		}
+	}
+
 	// Load existing clusters from database
 	rows, err := db.Query("SELECT id, kubeconfig FROM clusters")
 	if err != nil {

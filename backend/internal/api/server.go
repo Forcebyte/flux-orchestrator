@@ -62,8 +62,8 @@ func (s *Server) routes() {
 	// Health check
 	s.router.HandleFunc("/health", s.health).Methods("GET")
 
-	// Serve frontend static files (if built)
-	s.router.PathPrefix("/").Handler(http.FileServer(http.Dir("./frontend/build")))
+	// Serve frontend static files (if built) with SPA support
+	s.router.PathPrefix("/").HandlerFunc(s.serveFrontend)
 }
 
 // corsMiddleware adds CORS headers
@@ -90,6 +90,42 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // health returns server health status
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{"status": "healthy"})
+}
+
+// serveFrontend serves the frontend SPA and handles client-side routing
+func (s *Server) serveFrontend(w http.ResponseWriter, r *http.Request) {
+	// For SPA routing, serve index.html for all non-API routes
+	fs := http.Dir("./frontend/build")
+	file, err := fs.Open(r.URL.Path)
+	if err != nil {
+		// File not found, serve index.html for SPA routing
+		indexFile, err := fs.Open("index.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer indexFile.Close()
+		http.ServeContent(w, r, "index.html", time.Now(), indexFile.(http.ReadSeeker))
+		return
+	}
+	defer file.Close()
+
+	// Check if it's a directory
+	stat, err := file.Stat()
+	if err != nil || stat.IsDir() {
+		// Serve index.html for directories
+		indexFile, err := fs.Open("index.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer indexFile.Close()
+		http.ServeContent(w, r, "index.html", time.Now(), indexFile.(http.ReadSeeker))
+		return
+	}
+
+	// Serve the actual file
+	http.ServeContent(w, r, r.URL.Path, stat.ModTime(), file.(http.ReadSeeker))
 }
 
 // listClusters returns all registered clusters
