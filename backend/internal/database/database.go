@@ -93,7 +93,7 @@ func (db *DB) InitSchema() error {
 			status VARCHAR(50) DEFAULT 'Unknown',
 			message TEXT,
 			last_reconcile TIMESTAMP,
-			metadata JSON,
+			metadata JSONB,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(cluster_id, kind, namespace, name),
