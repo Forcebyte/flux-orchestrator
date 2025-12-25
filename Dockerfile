@@ -7,7 +7,7 @@ COPY backend ./backend
 RUN CGO_ENABLED=0 GOOS=linux go build -o /flux-orchestrator ./backend/cmd/server
 
 # Frontend builder
-FROM node:18-alpine AS frontend-builder
+FROM node:20-alpine AS frontend-builder
 WORKDIR /app
 COPY frontend/package*.json ./
 RUN npm install
