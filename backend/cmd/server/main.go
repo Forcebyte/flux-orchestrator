@@ -104,7 +104,7 @@ func main() {
 			}
 		} else {
 			// In-cluster already exists, just ensure it's loaded
-			if err := k8sClient.AddInClusterConfig(existingID); err != nil {
+			if err := k8sClient.AddInClusterConfig(existingCluster.ID); err != nil {
 				log.Printf("Warning: Failed to reload in-cluster configuration: %v", err)
 			} else {
 				log.Printf("In-cluster configuration already registered with ID: %s", existingCluster.ID)
