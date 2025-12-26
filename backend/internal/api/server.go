@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -140,24 +139,12 @@ func (s *Server) serveFrontend(w http.ResponseWriter, r *http.Request) {
 
 // listClusters returns all registered clusters
 func (s *Server) listClusters(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.db.Query(`
-		SELECT id, name, description, status, created_at, updated_at
-		FROM clusters
-		ORDER BY created_at DESC
-	`)
-	if err != nil {
+	var clusters []models.Cluster
+	if err := s.db.Select("id", "name", "description", "status", "created_at", "updated_at").
+		Order("created_at DESC").
+		Find(&clusters).Error; err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to query clusters")
 		return
-	}
-	defer rows.Close()
-
-	clusters := []models.Cluster{}
-	for rows.Next() {
-		var c models.Cluster
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Status, &c.CreatedAt, &c.UpdatedAt); err != nil {
-			continue
-		}
-		clusters = append(clusters, c)
 	}
 
 	respondJSON(w, http.StatusOK, clusters)
@@ -202,25 +189,21 @@ func (s *Server) createCluster(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Save to database with encrypted kubeconfig
-	_, err = s.db.Exec(`
-		INSERT INTO clusters (id, name, description, kubeconfig, status)
-		VALUES ($1, $2, $3, $4, $5)
-	`, clusterID, req.Name, req.Description, encryptedKubeconfig, status)
-
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to save cluster")
-		return
-	}
-
 	cluster := models.Cluster{
 		ID:          clusterID,
 		Name:        req.Name,
 		Description: req.Description,
+		KubeConfig:  encryptedKubeconfig,
 		Status:      status,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
 	}
 
+	if err := s.db.Create(&cluster).Error; err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to save cluster")
+		return
+	}
+
+	// Clear kubeconfig from response
+	cluster.KubeConfig = ""
 	respondJSON(w, http.StatusCreated, cluster)
 }
 
@@ -229,23 +212,19 @@ func (s *Server) getCluster(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
-	var c models.Cluster
-	err := s.db.QueryRow(`
-		SELECT id, name, description, status, created_at, updated_at
-		FROM clusters
-		WHERE id = $1
-	`, id).Scan(&c.ID, &c.Name, &c.Description, &c.Status, &c.CreatedAt, &c.UpdatedAt)
-
-	if err == sql.ErrNoRows {
-		respondError(w, http.StatusNotFound, "Cluster not found")
-		return
-	}
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to query cluster")
+	var cluster models.Cluster
+	if err := s.db.Select("id", "name", "description", "status", "created_at", "updated_at").
+		Where("id = ?", id).
+		First(&cluster).Error; err != nil {
+		if err.Error() == "record not found" {
+			respondError(w, http.StatusNotFound, "Cluster not found")
+		} else {
+			respondError(w, http.StatusInternalServerError, "Failed to query cluster")
+		}
 		return
 	}
 
-	respondJSON(w, http.StatusOK, c)
+	respondJSON(w, http.StatusOK, cluster)
 }
 
 // updateCluster updates a cluster
@@ -282,16 +261,18 @@ func (s *Server) updateCluster(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update database
-	_, err := s.db.Exec(`
-		UPDATE clusters
-		SET name = COALESCE(NULLIF($2, ''), name),
-			description = COALESCE(NULLIF($3, ''), description),
-			kubeconfig = COALESCE(NULLIF($4, ''), kubeconfig),
-			updated_at = CURRENT_TIMESTAMP
-		WHERE id = $1
-	`, id, req.Name, req.Description, req.KubeConfig)
+	updates := make(map[string]interface{})
+	if req.Name != "" {
+		updates["name"] = req.Name
+	}
+	if req.Description != "" {
+		updates["description"] = req.Description
+	}
+	if req.KubeConfig != "" {
+		updates["kubeconfig"] = req.KubeConfig
+	}
 
-	if err != nil {
+	if err := s.db.Model(&models.Cluster{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to update cluster")
 		return
 	}
@@ -304,8 +285,7 @@ func (s *Server) deleteCluster(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
-	_, err := s.db.Exec("DELETE FROM clusters WHERE id = $1", id)
-	if err != nil {
+	if err := s.db.Delete(&models.Cluster{}, "id = ?", id).Error; err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to delete cluster")
 		return
 	}
@@ -321,13 +301,13 @@ func (s *Server) checkClusterHealth(w http.ResponseWriter, r *http.Request) {
 	status, err := s.k8sClient.CheckClusterHealth(id)
 	if err != nil {
 		// Update database
-		s.db.Exec("UPDATE clusters SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", status, id)
+		s.db.Model(&models.Cluster{}).Where("id = ?", id).Update("status", status)
 		respondError(w, http.StatusServiceUnavailable, fmt.Sprintf("Cluster unhealthy: %v", err))
 		return
 	}
 
 	// Update database
-	s.db.Exec("UPDATE clusters SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", status, id)
+	s.db.Model(&models.Cluster{}).Where("id = ?", id).Update("status", status)
 
 	respondJSON(w, http.StatusOK, map[string]string{"status": status})
 }
@@ -346,19 +326,7 @@ func (s *Server) syncClusterResources(w http.ResponseWriter, r *http.Request) {
 
 	// Save to database
 	for _, res := range resources {
-		_, err := s.db.Exec(`
-			INSERT INTO flux_resources (id, cluster_id, kind, name, namespace, status, message, last_reconcile, metadata, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)
-			ON CONFLICT (cluster_id, kind, namespace, name)
-			DO UPDATE SET
-				status = EXCLUDED.status,
-				message = EXCLUDED.message,
-				last_reconcile = EXCLUDED.last_reconcile,
-				metadata = EXCLUDED.metadata,
-				updated_at = CURRENT_TIMESTAMP
-		`, res.ID, res.ClusterID, res.Kind, res.Name, res.Namespace, res.Status, res.Message, res.LastReconcile, res.Metadata)
-
-		if err != nil {
+		if err := s.db.Save(&res).Error; err != nil {
 			log.Printf("Failed to save resource %s: %v", res.ID, err)
 		}
 	}
@@ -374,30 +342,12 @@ func (s *Server) listClusterResources(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	clusterID := vars["id"]
 
-	rows, err := s.db.Query(`
-		SELECT id, cluster_id, kind, name, namespace, status, message, last_reconcile, created_at, updated_at
-		FROM flux_resources
-		WHERE cluster_id = $1
-		ORDER BY kind, namespace, name
-	`, clusterID)
-
-	if err != nil {
+	var resources []models.FluxResource
+	if err := s.db.Where("cluster_id = ?", clusterID).
+		Order("kind, namespace, name").
+		Find(&resources).Error; err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to query resources")
 		return
-	}
-	defer rows.Close()
-
-	resources := []models.FluxResource{}
-	for rows.Next() {
-		var r models.FluxResource
-		var lastReconcile sql.NullTime
-		if err := rows.Scan(&r.ID, &r.ClusterID, &r.Kind, &r.Name, &r.Namespace, &r.Status, &r.Message, &lastReconcile, &r.CreatedAt, &r.UpdatedAt); err != nil {
-			continue
-		}
-		if lastReconcile.Valid {
-			r.LastReconcile = lastReconcile.Time
-		}
-		resources = append(resources, r)
 	}
 
 	respondJSON(w, http.StatusOK, resources)
@@ -407,38 +357,18 @@ func (s *Server) listClusterResources(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listAllResources(w http.ResponseWriter, r *http.Request) {
 	kind := r.URL.Query().Get("kind")
 
-	query := `
-		SELECT id, cluster_id, kind, name, namespace, status, message, last_reconcile, created_at, updated_at
-		FROM flux_resources
-	`
-
-	var rows *sql.Rows
-	var err error
+	query := s.db.Model(&models.FluxResource{})
 
 	if kind != "" {
-		query += " WHERE kind = $1"
-		rows, err = s.db.Query(query+" ORDER BY cluster_id, namespace, name", kind)
+		query = query.Where("kind = ?", kind).Order("cluster_id, namespace, name")
 	} else {
-		rows, err = s.db.Query(query + " ORDER BY cluster_id, kind, namespace, name")
+		query = query.Order("cluster_id, kind, namespace, name")
 	}
 
-	if err != nil {
+	var resources []models.FluxResource
+	if err := query.Find(&resources).Error; err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to query resources")
 		return
-	}
-	defer rows.Close()
-
-	resources := []models.FluxResource{}
-	for rows.Next() {
-		var r models.FluxResource
-		var lastReconcile sql.NullTime
-		if err := rows.Scan(&r.ID, &r.ClusterID, &r.Kind, &r.Name, &r.Namespace, &r.Status, &r.Message, &lastReconcile, &r.CreatedAt, &r.UpdatedAt); err != nil {
-			continue
-		}
-		if lastReconcile.Valid {
-			r.LastReconcile = lastReconcile.Time
-		}
-		resources = append(resources, r)
 	}
 
 	respondJSON(w, http.StatusOK, resources)
@@ -450,25 +380,13 @@ func (s *Server) getResource(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 
 	var res models.FluxResource
-	var lastReconcile sql.NullTime
-
-	err := s.db.QueryRow(`
-		SELECT id, cluster_id, kind, name, namespace, status, message, last_reconcile, metadata, created_at, updated_at
-		FROM flux_resources
-		WHERE id = $1
-	`, id).Scan(&res.ID, &res.ClusterID, &res.Kind, &res.Name, &res.Namespace, &res.Status, &res.Message, &lastReconcile, &res.Metadata, &res.CreatedAt, &res.UpdatedAt)
-
-	if err == sql.ErrNoRows {
-		respondError(w, http.StatusNotFound, "Resource not found")
+	if err := s.db.Where("id = ?", id).First(&res).Error; err != nil {
+		if err.Error() == "record not found" {
+			respondError(w, http.StatusNotFound, "Resource not found")
+		} else {
+			respondError(w, http.StatusInternalServerError, "Failed to query resource")
+		}
 		return
-	}
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to query resource")
-		return
-	}
-
-	if lastReconcile.Valid {
-		res.LastReconcile = lastReconcile.Time
 	}
 
 	respondJSON(w, http.StatusOK, res)

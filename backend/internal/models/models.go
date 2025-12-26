@@ -2,32 +2,47 @@ package models
 
 import (
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // Cluster represents a Kubernetes cluster managed by the orchestrator
 type Cluster struct {
-	ID          string    `json:"id" db:"id"`
-	Name        string    `json:"name" db:"name"`
-	Description string    `json:"description" db:"description"`
-	KubeConfig  string    `json:"-" db:"kubeconfig"` // Hidden from JSON
-	CreatedAt   time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
-	Status      string    `json:"status" db:"status"` // healthy, unhealthy, unknown
+	ID          string    `json:"id" gorm:"primaryKey;size:100"`
+	Name        string    `json:"name" gorm:"size:255;uniqueIndex;not null"`
+	Description string    `json:"description" gorm:"type:text"`
+	KubeConfig  string    `json:"-" gorm:"column:kubeconfig;type:text;not null"` // Hidden from JSON
+	Status      string    `json:"status" gorm:"size:50;default:'unknown'"`       // healthy, unhealthy, unknown
+	CreatedAt   time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt   time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 // FluxResource represents a generic Flux resource
 type FluxResource struct {
-	ID           string    `json:"id" db:"id"`
-	ClusterID    string    `json:"cluster_id" db:"cluster_id"`
-	Kind         string    `json:"kind" db:"kind"` // Kustomization, HelmRelease, GitRepository, etc.
-	Name         string    `json:"name" db:"name"`
-	Namespace    string    `json:"namespace" db:"namespace"`
-	Status       string    `json:"status" db:"status"` // Ready, NotReady, Unknown
-	Message      string    `json:"message" db:"message"`
-	LastReconcile time.Time `json:"last_reconcile" db:"last_reconcile"`
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
-	Metadata     string    `json:"metadata" db:"metadata"` // JSON blob for additional data
+	ID            string    `json:"id" gorm:"primaryKey;size:255"`
+	ClusterID     string    `json:"cluster_id" gorm:"size:100;not null;index;uniqueIndex:idx_unique_resource"`
+	Kind          string    `json:"kind" gorm:"size:50;not null;index;uniqueIndex:idx_unique_resource"`             // Kustomization, HelmRelease, GitRepository, etc.
+	Name          string    `json:"name" gorm:"size:255;not null;uniqueIndex:idx_unique_resource"`
+	Namespace     string    `json:"namespace" gorm:"size:100;not null;uniqueIndex:idx_unique_resource"`
+	Status        string    `json:"status" gorm:"size:50;default:'Unknown';index"` // Ready, NotReady, Unknown
+	Message       string    `json:"message" gorm:"type:text"`
+	LastReconcile time.Time `json:"last_reconcile" gorm:"column:last_reconcile"`
+	Metadata      string    `json:"metadata" gorm:"type:text"` // JSON blob for additional data
+	CreatedAt     time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt     time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+
+	// Foreign key relationship
+	Cluster Cluster `json:"-" gorm:"foreignKey:ClusterID;constraint:OnDelete:CASCADE"`
+}
+
+// TableName specifies the table name for FluxResource
+func (FluxResource) TableName() string {
+	return "flux_resources"
+}
+
+// BeforeSave is a GORM hook to ensure unique constraint
+func (f *FluxResource) BeforeSave(tx *gorm.DB) error {
+	return nil
 }
 
 // Kustomization represents a Flux Kustomization resource

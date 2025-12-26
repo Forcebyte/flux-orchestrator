@@ -12,6 +12,7 @@ import (
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/database"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/encryption"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/k8s"
+	"github.com/Forcebyte/flux-orchestrator/backend/internal/models"
 )
 
 func main() {
@@ -45,10 +46,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close()
+	sqlDB, _ := db.DB.DB()
+	defer sqlDB.Close()
 
-	// Initialize database schema
-	if err := db.InitSchema(); err != nil {
+	// Initialize database schema with GORM AutoMigrate
+	if err := db.InitSchema(&models.Cluster{}, &models.FluxResource{}); err != nil {
 		log.Fatalf("Failed to initialize schema: %v", err)
 	}
 
@@ -64,12 +66,12 @@ func main() {
 		log.Println("SCRAPE_IN_CLUSTER enabled - attempting to register in-cluster configuration")
 		
 		// Check if in-cluster config already exists
-		var existingID string
-		err := db.QueryRow("SELECT id FROM clusters WHERE name = $1", inClusterName).Scan(&existingID)
+		var existingCluster models.Cluster
+		err := db.Where("name = ?", inClusterName).First(&existingCluster).Error
 		
-		if err != nil && err.Error() != "sql: no rows in result set" {
+		if err != nil && err.Error() != "record not found" {
 			log.Printf("Warning: Failed to check for existing in-cluster config: %v", err)
-		} else if existingID == "" {
+		} else if existingCluster.ID == "" {
 			// Register in-cluster configuration
 			inClusterID := "in-cluster"
 			
@@ -85,10 +87,14 @@ func main() {
 				}
 				
 				// Save to database with empty kubeconfig (indicates in-cluster)
-				_, err = db.Exec(`
-					INSERT INTO clusters (id, name, description, kubeconfig, status, created_at, updated_at)
-					VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-				`, inClusterID, inClusterName, inClusterDesc, "", status)
+				cluster := models.Cluster{
+					ID:          inClusterID,
+					Name:        inClusterName,
+					Description: inClusterDesc,
+					KubeConfig:  "",
+					Status:      status,
+				}
+				err = db.Create(&cluster).Error
 				
 				if err != nil {
 					log.Printf("Warning: Failed to save in-cluster configuration to database: %v", err)
@@ -101,34 +107,28 @@ func main() {
 			if err := k8sClient.AddInClusterConfig(existingID); err != nil {
 				log.Printf("Warning: Failed to reload in-cluster configuration: %v", err)
 			} else {
-				log.Printf("In-cluster configuration already registered with ID: %s", existingID)
+				log.Printf("In-cluster configuration already registered with ID: %s", existingCluster.ID)
 			}
 		}
 	}
 
 	// Load existing clusters from database
-	rows, err := db.Query("SELECT id, kubeconfig FROM clusters WHERE kubeconfig != ''")
-	if err != nil {
+	var clusters []models.Cluster
+	if err := db.Where("kubeconfig != ?", "").Find(&clusters).Error; err != nil {
 		log.Printf("Warning: Failed to load existing clusters: %v", err)
 	} else {
-		defer rows.Close()
-		for rows.Next() {
-			var id, encryptedKubeconfig string
-			if err := rows.Scan(&id, &encryptedKubeconfig); err != nil {
-				continue
-			}
-
+		for _, cluster := range clusters {
 			// Decrypt kubeconfig
-			kubeconfig, err := encryptor.Decrypt(encryptedKubeconfig)
+			kubeconfig, err := encryptor.Decrypt(cluster.KubeConfig)
 			if err != nil {
-				log.Printf("Warning: Failed to decrypt kubeconfig for cluster %s: %v", id, err)
+				log.Printf("Warning: Failed to decrypt kubeconfig for cluster %s: %v", cluster.ID, err)
 				continue
 			}
 
-			if err := k8sClient.AddCluster(id, kubeconfig); err != nil {
-				log.Printf("Warning: Failed to add cluster %s: %v", id, err)
+			if err := k8sClient.AddCluster(cluster.ID, kubeconfig); err != nil {
+				log.Printf("Warning: Failed to add cluster %s: %v", cluster.ID, err)
 			} else {
-				log.Printf("Loaded cluster: %s", id)
+				log.Printf("Loaded cluster: %s", cluster.ID)
 			}
 		}
 	}
@@ -157,26 +157,17 @@ func syncWorker(db *database.DB, k8sClient *k8s.Client) {
 	for range ticker.C {
 		log.Println("Running periodic sync...")
 
-		rows, err := db.Query("SELECT id FROM clusters WHERE status = 'healthy'")
-		if err != nil {
+		var clusters []models.Cluster
+		if err := db.Where("status = ?", "healthy").Find(&clusters).Error; err != nil {
 			log.Printf("Sync worker: Failed to query clusters: %v", err)
 			continue
 		}
 
-		var clusterIDs []string
-		for rows.Next() {
-			var id string
-			if err := rows.Scan(&id); err != nil {
-				continue
-			}
-			clusterIDs = append(clusterIDs, id)
-		}
-		rows.Close()
-
-		for _, clusterID := range clusterIDs {
+		for _, cluster := range clusters {
+			clusterID := cluster.ID
 			// Check cluster health
 			status, err := k8sClient.CheckClusterHealth(clusterID)
-			db.Exec("UPDATE clusters SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", status, clusterID)
+			db.Model(&models.Cluster{}).Where("id = ?", clusterID).Update("status", status)
 
 			if err != nil {
 				log.Printf("Sync worker: Cluster %s is unhealthy: %v", clusterID, err)
@@ -191,19 +182,8 @@ func syncWorker(db *database.DB, k8sClient *k8s.Client) {
 			}
 
 			for _, res := range resources {
-				_, err := db.Exec(`
-					INSERT INTO flux_resources (id, cluster_id, kind, name, namespace, status, message, last_reconcile, metadata, updated_at)
-					VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)
-					ON CONFLICT (cluster_id, kind, namespace, name)
-					DO UPDATE SET
-						status = EXCLUDED.status,
-						message = EXCLUDED.message,
-						last_reconcile = EXCLUDED.last_reconcile,
-						metadata = EXCLUDED.metadata,
-						updated_at = CURRENT_TIMESTAMP
-				`, res.ID, res.ClusterID, res.Kind, res.Name, res.Namespace, res.Status, res.Message, res.LastReconcile, res.Metadata)
-
-				if err != nil {
+				// Use GORM's Clauses for upsert
+				if err := db.Save(&res).Error; err != nil {
 					log.Printf("Sync worker: Failed to save resource %s: %v", res.ID, err)
 				}
 			}
