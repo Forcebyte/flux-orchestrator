@@ -69,11 +69,12 @@ func New(cfg Config) (*DB, error) {
 
 // InitSchema initializes the database schema
 func (db *DB) InitSchema() error {
-	var schema string
+	var schemas []string
 
 	switch db.driver {
 	case "postgres":
-		schema = `
+		// PostgreSQL can execute multiple statements at once
+		schema := `
 		CREATE TABLE IF NOT EXISTS clusters (
 			id VARCHAR(255) PRIMARY KEY,
 			name VARCHAR(255) NOT NULL UNIQUE,
@@ -104,44 +105,46 @@ func (db *DB) InitSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_flux_resources_kind ON flux_resources(kind);
 		CREATE INDEX IF NOT EXISTS idx_flux_resources_status ON flux_resources(status);
 		`
+		schemas = []string{schema}
 	case "mysql":
-		schema = `
-		CREATE TABLE IF NOT EXISTS clusters (
-			id VARCHAR(255) PRIMARY KEY,
-			name VARCHAR(255) NOT NULL UNIQUE,
-			description TEXT,
-			kubeconfig TEXT NOT NULL,
-			status VARCHAR(50) DEFAULT 'unknown',
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-		);
-
-		CREATE TABLE IF NOT EXISTS flux_resources (
-			id VARCHAR(255) PRIMARY KEY,
-			cluster_id VARCHAR(255) NOT NULL,
-			kind VARCHAR(100) NOT NULL,
-			name VARCHAR(255) NOT NULL,
-			namespace VARCHAR(255) NOT NULL,
-			status VARCHAR(50) DEFAULT 'Unknown',
-			message TEXT,
-			last_reconcile TIMESTAMP NULL,
-			metadata JSON,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-			UNIQUE KEY unique_resource (cluster_id, kind, namespace, name),
-			FOREIGN KEY (cluster_id) REFERENCES clusters(id) ON DELETE CASCADE
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_flux_resources_cluster ON flux_resources(cluster_id);
-		CREATE INDEX IF NOT EXISTS idx_flux_resources_kind ON flux_resources(kind);
-		CREATE INDEX IF NOT EXISTS idx_flux_resources_status ON flux_resources(status);
-		`
+		// MySQL requires separate execution of each statement
+		schemas = []string{
+			`CREATE TABLE IF NOT EXISTS clusters (
+				id VARCHAR(255) PRIMARY KEY,
+				name VARCHAR(255) NOT NULL UNIQUE,
+				description TEXT,
+				kubeconfig TEXT NOT NULL,
+				status VARCHAR(50) DEFAULT 'unknown',
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+			)`,
+			`CREATE TABLE IF NOT EXISTS flux_resources (
+				id VARCHAR(255) PRIMARY KEY,
+				cluster_id VARCHAR(255) NOT NULL,
+				kind VARCHAR(100) NOT NULL,
+				name VARCHAR(255) NOT NULL,
+				namespace VARCHAR(255) NOT NULL,
+				status VARCHAR(50) DEFAULT 'Unknown',
+				message TEXT,
+				last_reconcile TIMESTAMP NULL,
+				metadata JSON,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+				UNIQUE KEY unique_resource (cluster_id, kind, namespace, name),
+				FOREIGN KEY (cluster_id) REFERENCES clusters(id) ON DELETE CASCADE
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_flux_resources_cluster ON flux_resources(cluster_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_flux_resources_kind ON flux_resources(kind)`,
+			`CREATE INDEX IF NOT EXISTS idx_flux_resources_status ON flux_resources(status)`,
+		}
 	default:
 		return fmt.Errorf("unsupported database driver: %s", db.driver)
 	}
 
-	if _, err := db.Exec(schema); err != nil {
-		return fmt.Errorf("failed to initialize schema: %w", err)
+	for _, schema := range schemas {
+		if _, err := db.Exec(schema); err != nil {
+			return fmt.Errorf("failed to initialize schema: %w", err)
+		}
 	}
 
 	log.Println("Database schema initialized successfully")
