@@ -76,7 +76,7 @@ func (db *DB) InitSchema() error {
 		// PostgreSQL can execute multiple statements at once
 		schema := `
 		CREATE TABLE IF NOT EXISTS clusters (
-			id VARCHAR(255) PRIMARY KEY,
+			id VARCHAR(100) PRIMARY KEY,
 			name VARCHAR(255) NOT NULL UNIQUE,
 			description TEXT,
 			kubeconfig TEXT NOT NULL,
@@ -87,10 +87,10 @@ func (db *DB) InitSchema() error {
 
 		CREATE TABLE IF NOT EXISTS flux_resources (
 			id VARCHAR(255) PRIMARY KEY,
-			cluster_id VARCHAR(255) NOT NULL,
-			kind VARCHAR(100) NOT NULL,
+			cluster_id VARCHAR(100) NOT NULL,
+			kind VARCHAR(50) NOT NULL,
 			name VARCHAR(255) NOT NULL,
-			namespace VARCHAR(255) NOT NULL,
+			namespace VARCHAR(100) NOT NULL,
 			status VARCHAR(50) DEFAULT 'Unknown',
 			message TEXT,
 			last_reconcile TIMESTAMP,
@@ -110,7 +110,7 @@ func (db *DB) InitSchema() error {
 		// MySQL requires separate execution of each statement
 		schemas = []string{
 			`CREATE TABLE IF NOT EXISTS clusters (
-				id VARCHAR(255) PRIMARY KEY,
+				id VARCHAR(100) PRIMARY KEY,
 				name VARCHAR(255) NOT NULL UNIQUE,
 				description TEXT,
 				kubeconfig TEXT NOT NULL,
@@ -120,10 +120,10 @@ func (db *DB) InitSchema() error {
 			)`,
 			`CREATE TABLE IF NOT EXISTS flux_resources (
 				id VARCHAR(255) PRIMARY KEY,
-				cluster_id VARCHAR(255) NOT NULL,
-				kind VARCHAR(100) NOT NULL,
+				cluster_id VARCHAR(100) NOT NULL,
+				kind VARCHAR(50) NOT NULL,
 				name VARCHAR(255) NOT NULL,
-				namespace VARCHAR(255) NOT NULL,
+				namespace VARCHAR(100) NOT NULL,
 				status VARCHAR(50) DEFAULT 'Unknown',
 				message TEXT,
 				last_reconcile TIMESTAMP NULL,
