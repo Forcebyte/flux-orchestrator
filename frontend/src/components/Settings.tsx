@@ -24,7 +24,13 @@ const Settings: React.FC = () => {
         setAutoSyncInterval(autoSync.value);
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to load settings');
+      // If settings table doesn't exist yet, use defaults (will be created on first save)
+      const errorMsg = err.response?.data?.error || '';
+      if (errorMsg.includes("doesn't exist") || errorMsg.includes("does not exist")) {
+        console.log('Settings table not found, using defaults');
+      } else {
+        setError(errorMsg || 'Failed to load settings');
+      }
     } finally {
       setLoading(false);
     }
