@@ -264,9 +264,13 @@ func (s *Server) createCluster(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.db.Create(&cluster).Error; err != nil {
+		s.logActivity("create", "cluster", clusterID, req.Name, clusterID, req.Name, "failed", fmt.Sprintf("Database error: %v", err))
 		respondError(w, http.StatusInternalServerError, "Failed to save cluster")
 		return
 	}
+
+	// Log successful creation
+	s.logActivity("create", "cluster", clusterID, req.Name, clusterID, req.Name, "success", fmt.Sprintf("Cluster created with status: %s", status))
 
 	// Clear kubeconfig from response
 	cluster.KubeConfig = ""
@@ -342,10 +346,21 @@ func (s *Server) updateCluster(w http.ResponseWriter, r *http.Request) {
 		updates["health_check_interval"] = *req.HealthCheckInterval
 	}
 
+	var cluster models.Cluster
+	s.db.Select("name").Where("id = ?", id).First(&cluster)
+
 	if err := s.db.Model(&models.Cluster{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		s.logActivity("update", "cluster", id, cluster.Name, id, cluster.Name, "failed", fmt.Sprintf("Database error: %v", err))
 		respondError(w, http.StatusInternalServerError, "Failed to update cluster")
 		return
 	}
+
+	// Log successful update
+	updateFields := []string{}
+	for k := range updates {
+		updateFields = append(updateFields, k)
+	}
+	s.logActivity("update", "cluster", id, cluster.Name, id, cluster.Name, "success", fmt.Sprintf("Updated fields: %v", updateFields))
 
 	respondJSON(w, http.StatusOK, map[string]string{"message": "Cluster updated"})
 }
@@ -355,10 +370,17 @@ func (s *Server) deleteCluster(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
+	var cluster models.Cluster
+	s.db.Select("name").Where("id = ?", id).First(&cluster)
+
 	if err := s.db.Delete(&models.Cluster{}, "id = ?", id).Error; err != nil {
+		s.logActivity("delete", "cluster", id, cluster.Name, id, cluster.Name, "failed", fmt.Sprintf("Database error: %v", err))
 		respondError(w, http.StatusInternalServerError, "Failed to delete cluster")
 		return
 	}
+
+	// Log successful deletion
+	s.logActivity("delete", "cluster", id, cluster.Name, id, cluster.Name, "success", "Cluster deleted")
 
 	respondJSON(w, http.StatusOK, map[string]string{"message": "Cluster deleted"})
 }
@@ -528,12 +550,19 @@ func (s *Server) reconcileFluxResource(w http.ResponseWriter, r *http.Request) {
 	namespace := vars["namespace"]
 	name := vars["name"]
 
+	var cluster models.Cluster
+	s.db.Select("name").Where("id = ?", clusterID).First(&cluster)
+
 	ctx := context.Background()
 	err := s.k8sClient.ReconcileResource(ctx, clusterID, kind, namespace, name)
 	if err != nil {
+		s.logActivity("reconcile", kind, fmt.Sprintf("%s/%s", namespace, name), name, clusterID, cluster.Name, "failed", fmt.Sprintf("Error: %v", err))
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to reconcile: %v", err))
 		return
 	}
+
+	// Log successful reconciliation
+	s.logActivity("reconcile", kind, fmt.Sprintf("%s/%s", namespace, name), name, clusterID, cluster.Name, "success", fmt.Sprintf("Reconciled %s/%s", namespace, name))
 
 	respondJSON(w, http.StatusOK, map[string]string{"message": "Reconciliation triggered"})
 }
@@ -546,12 +575,19 @@ func (s *Server) suspendFluxResource(w http.ResponseWriter, r *http.Request) {
 	namespace := vars["namespace"]
 	name := vars["name"]
 
+	var cluster models.Cluster
+	s.db.Select("name").Where("id = ?", clusterID).First(&cluster)
+
 	ctx := context.Background()
 	err := s.k8sClient.SuspendResource(ctx, clusterID, kind, namespace, name)
 	if err != nil {
+		s.logActivity("suspend", kind, fmt.Sprintf("%s/%s", namespace, name), name, clusterID, cluster.Name, "failed", fmt.Sprintf("Error: %v", err))
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to suspend: %v", err))
 		return
 	}
+
+	// Log successful suspension
+	s.logActivity("suspend", kind, fmt.Sprintf("%s/%s", namespace, name), name, clusterID, cluster.Name, "success", fmt.Sprintf("Suspended %s/%s", namespace, name))
 
 	respondJSON(w, http.StatusOK, map[string]string{"message": "Resource suspended"})
 }
@@ -564,12 +600,19 @@ func (s *Server) resumeFluxResource(w http.ResponseWriter, r *http.Request) {
 	namespace := vars["namespace"]
 	name := vars["name"]
 
+	var cluster models.Cluster
+	s.db.Select("name").Where("id = ?", clusterID).First(&cluster)
+
 	ctx := context.Background()
 	err := s.k8sClient.ResumeResource(ctx, clusterID, kind, namespace, name)
 	if err != nil {
+		s.logActivity("resume", kind, fmt.Sprintf("%s/%s", namespace, name), name, clusterID, cluster.Name, "failed", fmt.Sprintf("Error: %v", err))
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to resume: %v", err))
 		return
 	}
+
+	// Log successful resume
+	s.logActivity("resume", kind, fmt.Sprintf("%s/%s", namespace, name), name, clusterID, cluster.Name, "success", fmt.Sprintf("Resumed %s/%s", namespace, name))
 
 	respondJSON(w, http.StatusOK, map[string]string{"message": "Resource resumed"})
 }
@@ -645,9 +688,13 @@ func (s *Server) updateSetting(w http.ResponseWriter, r *http.Request) {
 	
 	// Save will update if exists, create if not
 	if err := s.db.Where("setting_key = ?", key).Assign(models.Setting{Value: req.Value}).FirstOrCreate(&setting).Error; err != nil {
+		s.logActivity("update", "setting", key, key, "", "", "failed", fmt.Sprintf("Database error: %v", err))
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to save setting: %v", err))
 		return
 	}
+
+	// Log successful settings update
+	s.logActivity("update", "setting", key, key, "", "", "success", fmt.Sprintf("Updated %s to %s", key, req.Value))
 
 	respondJSON(w, http.StatusOK, setting)
 }

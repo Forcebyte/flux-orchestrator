@@ -9,6 +9,8 @@ const Dashboard: React.FC = () => {
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [kindFilter, setKindFilter] = useState<string>('all');
+  const [clusterFilter, setClusterFilter] = useState<string>('all');
 
   useEffect(() => {
     loadData();
@@ -60,9 +62,45 @@ const Dashboard: React.FC = () => {
     : 0;
 
   // Filter resources based on status filter
-  const filteredResources = statusFilter === 'all' 
-    ? resources 
-    : resources.filter(r => r.status.toLowerCase() === statusFilter.toLowerCase());
+  const filteredResources = resources.filter(r => {
+    // Status filter
+    if (statusFilter !== 'all' && r.status.toLowerCase() !== statusFilter.toLowerCase()) {
+      return false;
+    }
+    // Kind filter
+    if (kindFilter !== 'all' && r.kind !== kindFilter) {
+      return false;
+    }
+    // Cluster filter
+    if (clusterFilter !== 'all' && r.cluster_id !== clusterFilter) {
+      return false;
+    }
+    return true;
+  });
+
+  const handleStatusClick = (status: string) => {
+    setStatusFilter(status);
+    setKindFilter('all');
+    setClusterFilter('all');
+  };
+
+  const handleKindClick = (kind: string) => {
+    setKindFilter(kind);
+    setStatusFilter('all');
+    setClusterFilter('all');
+  };
+
+  const handleClusterClick = (clusterId: string) => {
+    setClusterFilter(clusterId);
+    setStatusFilter('all');
+    setKindFilter('all');
+  };
+
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setKindFilter('all');
+    setClusterFilter('all');
+  };
 
   if (loading) {
     return <div className="dashboard-loading">Loading dashboard...</div>;
@@ -74,6 +112,14 @@ const Dashboard: React.FC = () => {
         <div>
           <h2>Dashboard</h2>
           <p>Overview of all Flux resources across clusters</p>
+          {(statusFilter !== 'all' || kindFilter !== 'all' || clusterFilter !== 'all') && (
+            <div className="active-filters">
+              {statusFilter !== 'all' && <span className="filter-tag">Status: {statusFilter}</span>}
+              {kindFilter !== 'all' && <span className="filter-tag">Type: {kindFilter}</span>}
+              {clusterFilter !== 'all' && <span className="filter-tag">Cluster: {clusters.find(c => c.id === clusterFilter)?.name}</span>}
+              <button className="clear-filters-btn" onClick={clearFilters}>Clear Filters</button>
+            </div>
+          )}
         </div>
         <button className="refresh-btn" onClick={loadData}>
           🔄 Refresh
@@ -84,25 +130,25 @@ const Dashboard: React.FC = () => {
       <div className="quick-filters">
         <button 
           className={`filter-btn ${statusFilter === 'all' ? 'active' : ''}`}
-          onClick={() => setStatusFilter('all')}
+          onClick={() => handleStatusClick('all')}
         >
           All ({resources.length})
         </button>
         <button 
           className={`filter-btn filter-ready ${statusFilter === 'ready' ? 'active' : ''}`}
-          onClick={() => setStatusFilter('ready')}
+          onClick={() => handleStatusClick('ready')}
         >
           ✅ Ready ({stats.ready})
         </button>
         <button 
           className={`filter-btn filter-notready ${statusFilter === 'notready' ? 'active' : ''}`}
-          onClick={() => setStatusFilter('notready')}
+          onClick={() => handleStatusClick('notready')}
         >
           ⚠️ Not Ready ({stats.notReady})
         </button>
         <button 
           className={`filter-btn filter-unknown ${statusFilter === 'unknown' ? 'active' : ''}`}
-          onClick={() => setStatusFilter('unknown')}
+          onClick={() => handleStatusClick('unknown')}
         >
           ❓ Unknown ({stats.unknown})
         </button>
@@ -110,7 +156,7 @@ const Dashboard: React.FC = () => {
 
       {/* Top Stats Cards */}
       <div className="stats-grid">
-        <div className="stat-card total">
+        <div className="stat-card total clickable" onClick={() => handleStatusClick('all')}>
           <div className="stat-icon">📦</div>
           <div className="stat-content">
             <h3>Total Resources</h3>
@@ -119,7 +165,7 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="stat-card ready">
+        <div className="stat-card ready clickable" onClick={() => handleStatusClick('ready')}>
           <div className="stat-icon">✅</div>
           <div className="stat-content">
             <h3>Ready</h3>
@@ -128,7 +174,7 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="stat-card notready">
+        <div className="stat-card notready clickable" onClick={() => handleStatusClick('notready')}>
           <div className="stat-icon">⚠️</div>
           <div className="stat-content">
             <h3>Not Ready</h3>
@@ -137,7 +183,7 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="stat-card suspended">
+        <div className="stat-card suspended clickable" onClick={() => handleStatusClick('unknown')}>
           <div className="stat-icon">⏸️</div>
           <div className="stat-content">
             <h3>Suspended</h3>
@@ -187,7 +233,12 @@ const Dashboard: React.FC = () => {
                   total: items.length,
                 };
                 return (
-                  <div key={kind} className="kind-item">
+                  <div 
+                    key={kind} 
+                    className={`kind-item clickable ${kindFilter === kind ? 'selected' : ''}`}
+                    onClick={() => handleKindClick(kind)}
+                    title={`Click to filter by ${kind}`}
+                  >
                     <div className="kind-info">
                       <span className="kind-icon">{getKindIcon(kind)}</span>
                       <span className="kind-name">{kind}</span>
@@ -218,7 +269,12 @@ const Dashboard: React.FC = () => {
                 total: clusterResources.length,
               };
               return (
-                <div key={cluster.id} className="cluster-item">
+                <div 
+                  key={cluster.id} 
+                  className={`cluster-item clickable ${clusterFilter === cluster.id ? 'selected' : ''}`}
+                  onClick={() => handleClusterClick(cluster.id)}
+                  title={`Click to filter by ${cluster.name}`}
+                >
                   <div className="cluster-header">
                     <div>
                       <div className="cluster-name">🖥️ {cluster.name}</div>
@@ -261,11 +317,16 @@ const Dashboard: React.FC = () => {
 
         {/* Recent Resources */}
         <div className="dashboard-card">
-          <h3>Recent Resources {statusFilter !== 'all' && `(${filteredResources.length})`}</h3>
+          <h3>
+            {kindFilter !== 'all' || clusterFilter !== 'all' || statusFilter !== 'all' 
+              ? `Filtered Resources (${filteredResources.length})`
+              : `Recent Resources`
+            }
+          </h3>
           <div className="recent-resources">
-            {(statusFilter === 'all' ? resources : filteredResources)
+            {filteredResources
               .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-              .slice(0, 15)
+              .slice(0, 20)
               .map(resource => (
                 <div key={resource.id} className="resource-row">
                   <span className="resource-icon">{getKindIcon(resource.kind)}</span>

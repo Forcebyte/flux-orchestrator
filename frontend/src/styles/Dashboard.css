@@ -23,6 +23,39 @@
   font-size: 14px;
 }
 
+.active-filters {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-tag {
+  background: #4299e1;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.clear-filters-btn {
+  background: #e2e8f0;
+  color: #2d3748;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clear-filters-btn:hover {
+  background: #cbd5e0;
+}
+
 .refresh-btn {
   padding: 10px 20px;
   background: #0066cc;
@@ -70,9 +103,17 @@
   border-left: 4px solid;
 }
 
+.stat-card.clickable {
+  cursor: pointer;
+}
+
 .stat-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.stat-card.clickable:active {
+  transform: translateY(-2px);
 }
 
 .stat-card.total {
@@ -238,9 +279,22 @@
   transition: all 0.2s;
 }
 
+.kind-item.clickable {
+  cursor: pointer;
+}
+
 .kind-item:hover {
   background: #edf2f7;
   transform: translateX(4px);
+}
+
+.kind-item.selected {
+  background: #bee3f8;
+  border: 2px solid #4299e1;
+}
+
+.kind-item.clickable:active {
+  transform: translateX(2px);
 }
 
 .kind-info {
@@ -300,9 +354,23 @@
   transition: all 0.2s;
 }
 
+.cluster-item.clickable {
+  cursor: pointer;
+}
+
 .cluster-item:hover {
   background: #edf2f7;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.cluster-item.selected {
+  background: #bee3f8;
+  border-left: 4px solid #2c5282;
+  box-shadow: 0 4px 16px rgba(66, 153, 225, 0.3);
+}
+
+.cluster-item.clickable:active {
+  transform: scale(0.98);
 }
 
 .cluster-header {
@@ -562,6 +630,20 @@
 }
 
 /* Dark mode styles */
+.dark-mode .filter-tag {
+  background: #3182ce;
+  color: white;
+}
+
+.dark-mode .clear-filters-btn {
+  background: #4a5568;
+  color: #e2e8f0;
+}
+
+.dark-mode .clear-filters-btn:hover {
+  background: #2d3748;
+}
+
 .dark-mode .filter-btn {
   background: #2d3748;
   border-color: #4a5568;
@@ -585,6 +667,32 @@
 
 .dark-mode .health-overview {
   background: #2d3748;
+}
+
+.dark-mode .kind-item {
+  background: #1a202c;
+}
+
+.dark-mode .kind-item:hover {
+  background: #374151;
+}
+
+.dark-mode .kind-item.selected {
+  background: #2c5282;
+  border-color: #4299e1;
+}
+
+.dark-mode .cluster-item {
+  background: #1a202c;
+}
+
+.dark-mode .cluster-item:hover {
+  background: #374151;
+}
+
+.dark-mode .cluster-item.selected {
+  background: #2c5282;
+  border-color: #4299e1;
 }
 
 .dark-mode .kind-item,
