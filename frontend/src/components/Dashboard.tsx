@@ -275,11 +275,12 @@ const Dashboard: React.FC = () => {
                       {resource.kind} • {resource.namespace || 'cluster-scoped'}
                     </div>
                   </div>
-                <span className={`status-badge status-${resource.status.toLowerCase()}`}>
-                  {resource.status}
-                </span>
-              </div>
-            ))}
+                  <span className={`status-badge status-${resource.status.toLowerCase()}`}>
+                    {resource.status}
+                  </span>
+                </div>
+              ))}
+          </div>
         </div>
       </div>
 
