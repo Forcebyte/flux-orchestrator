@@ -829,25 +829,25 @@ respondJSON(w, http.StatusOK, map[string]interface{}{
 }
 
 func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
-state, err := auth.GenerateState()
-if err != nil {
-respondError(w, http.StatusInternalServerError, "Failed to generate state")
-return
-}
+	state, err := auth.GenerateState()
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to generate state")
+		return
+	}
 
-// Store state in cookie for validation
-http.SetCookie(w, &http.Cookie{
-Name:     "oauth_state",
-Value:    state,
-Path:     "/",
-MaxAge:   600, // 10 minutes
-HttpOnly: true,
-Secure:   false, // Set to true in production with HTTPS
-SameSite: http.SameSiteLaxMode,
-})
+	// Store state in cookie for validation
+	http.SetCookie(w, &http.Cookie{
+		Name:     "oauth_state",
+		Value:    state,
+		Path:     "/",
+		MaxAge:   600, // 10 minutes
+		HttpOnly: true,
+		Secure:   true, // Ensure cookie is only sent over HTTPS
+		SameSite: http.SameSiteLaxMode,
+	})
 
-authURL := s.oauthProvider.GetAuthURL(state)
-http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
+	authURL := s.oauthProvider.GetAuthURL(state)
+	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 }
 
 func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
