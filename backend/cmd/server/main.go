@@ -52,7 +52,7 @@ func main() {
 	defer sqlDB.Close()
 
 	// Initialize database schema with GORM AutoMigrate
-	if err := db.InitSchema(&models.Cluster{}, &models.FluxResource{}); err != nil {
+	if err := db.InitSchema(&models.Cluster{}, &models.FluxResource{}, &models.AzureSubscription{}, &models.Activity{}); err != nil {
 		log.Fatalf("Failed to initialize schema: %v", err)
 	}
 

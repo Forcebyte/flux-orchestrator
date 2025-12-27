@@ -70,6 +70,43 @@ const Clusters: React.FC = () => {
     }
   };
 
+  const handleToggleFavorite = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await clusterApi.toggleFavorite(id);
+      loadClusters();
+    } catch (err) {
+      console.error('Failed to toggle favorite:', err);
+      error('Failed to toggle favorite');
+    }
+  };
+
+  const handleExport = async (id: string, format: 'json' | 'csv', e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const response = await clusterApi.exportCluster(id, format);
+      const cluster = clusters.find(c => c.id === id);
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${cluster?.name || id}-export.${format}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      success(`Exported cluster as ${format.toUpperCase()}`);
+    } catch (err) {
+      console.error('Failed to export cluster:', err);
+      error('Failed to export cluster');
+    }
+  };
+
+  // Sort clusters: favorites first, then by name
+  const sortedClusters = [...clusters].sort((a, b) => {
+    if (a.is_favorite && !b.is_favorite) return -1;
+    if (!a.is_favorite && b.is_favorite) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
   if (loading) {
     return <div className="loading">Loading clusters...</div>;
   }
@@ -98,18 +135,35 @@ const Clusters: React.FC = () => {
           </div>
         ) : (
           <div className="grid">
-            {clusters.map((cluster) => (
+            {sortedClusters.map((cluster) => (
               <div key={cluster.id} className="cluster-card" onClick={() => navigate(`/clusters/${cluster.id}`)}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                  <div>
-                    <h4>{cluster.name}</h4>
-                    <p>{cluster.description || 'No description'}</p>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <button
+                        className={`favorite-btn ${cluster.is_favorite ? 'favorite-active' : ''}`}
+                        onClick={(e) => handleToggleFavorite(cluster.id, e)}
+                        title={cluster.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+                      >
+                        {cluster.is_favorite ? '⭐' : '☆'}
+                      </button>
+                      <h4 style={{ margin: 0 }}>{cluster.name}</h4>
+                      {cluster.source === 'azure-aks' && (
+                        <span className="source-badge" title="Azure AKS">☁️</span>
+                      )}
+                      {cluster.resource_count !== undefined && cluster.resource_count > 0 && (
+                        <span className="resource-count-badge" title={`${cluster.resource_count} resources`}>
+                          {cluster.resource_count}
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ margin: 0, color: '#666' }}>{cluster.description || 'No description'}</p>
                   </div>
                   <span className={`status-badge status-${cluster.status}`}>
                     {cluster.status}
                   </span>
                 </div>
-                <div style={{ marginTop: '15px', display: 'flex', gap: '8px' }}>
+                <div style={{ marginTop: '15px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   <button
                     className="btn btn-sm btn-success"
                     onClick={(e) => {
@@ -118,6 +172,20 @@ const Clusters: React.FC = () => {
                     }}
                   >
                     Sync
+                  </button>
+                  <button
+                    className="btn btn-sm"
+                    onClick={(e) => handleExport(cluster.id, 'json', e)}
+                    title="Export as JSON"
+                  >
+                    📥 JSON
+                  </button>
+                  <button
+                    className="btn btn-sm"
+                    onClick={(e) => handleExport(cluster.id, 'csv', e)}
+                    title="Export as CSV"
+                  >
+                    📥 CSV
                   </button>
                   <button
                     className="btn btn-sm btn-danger"

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { resourceApi, clusterApi } from '../api';
 import { FluxResource, Cluster } from '../types';
+import ActivityFeed from './ActivityFeed';
 import '../styles/Dashboard.css';
 
 const Dashboard: React.FC = () => {
   const [resources, setResources] = useState<FluxResource[]>([]);
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   useEffect(() => {
     loadData();
@@ -57,6 +59,11 @@ const Dashboard: React.FC = () => {
     ? Math.round((stats.ready / stats.total) * 100) 
     : 0;
 
+  // Filter resources based on status filter
+  const filteredResources = statusFilter === 'all' 
+    ? resources 
+    : resources.filter(r => r.status.toLowerCase() === statusFilter.toLowerCase());
+
   if (loading) {
     return <div className="dashboard-loading">Loading dashboard...</div>;
   }
@@ -70,6 +77,34 @@ const Dashboard: React.FC = () => {
         </div>
         <button className="refresh-btn" onClick={loadData}>
           🔄 Refresh
+        </button>
+      </div>
+
+      {/* Quick Filters */}
+      <div className="quick-filters">
+        <button 
+          className={`filter-btn ${statusFilter === 'all' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('all')}
+        >
+          All ({resources.length})
+        </button>
+        <button 
+          className={`filter-btn filter-ready ${statusFilter === 'ready' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('ready')}
+        >
+          ✅ Ready ({stats.ready})
+        </button>
+        <button 
+          className={`filter-btn filter-notready ${statusFilter === 'notready' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('notready')}
+        >
+          ⚠️ Not Ready ({stats.notReady})
+        </button>
+        <button 
+          className={`filter-btn filter-unknown ${statusFilter === 'unknown' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('unknown')}
+        >
+          ❓ Unknown ({stats.unknown})
         </button>
       </div>
 
@@ -218,22 +253,28 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Recent Resources */}
-      <div className="dashboard-card">
-        <h3>Recent Resources</h3>
-        <div className="recent-resources">
-          {resources
-            .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-            .slice(0, 10)
-            .map(resource => (
-              <div key={resource.id} className="resource-row">
-                <span className="resource-icon">{getKindIcon(resource.kind)}</span>
-                <div className="resource-details">
-                  <div className="resource-name">{resource.name}</div>
-                  <div className="resource-meta">
-                    {resource.kind} • {resource.namespace || 'cluster-scoped'}
+      {/* Activity Feed and Recent Resources */}
+      <div className="dashboard-bottom-grid">
+        <div className="dashboard-card">
+          <ActivityFeed limit={20} />
+        </div>
+
+        {/* Recent Resources */}
+        <div className="dashboard-card">
+          <h3>Recent Resources {statusFilter !== 'all' && `(${filteredResources.length})`}</h3>
+          <div className="recent-resources">
+            {(statusFilter === 'all' ? resources : filteredResources)
+              .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+              .slice(0, 15)
+              .map(resource => (
+                <div key={resource.id} className="resource-row">
+                  <span className="resource-icon">{getKindIcon(resource.kind)}</span>
+                  <div className="resource-details">
+                    <div className="resource-name">{resource.name}</div>
+                    <div className="resource-meta">
+                      {resource.kind} • {resource.namespace || 'cluster-scoped'}
+                    </div>
                   </div>
-                </div>
                 <span className={`status-badge status-${resource.status.toLowerCase()}`}>
                   {resource.status}
                 </span>

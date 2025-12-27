@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/auth"
+	"github.com/Forcebyte/flux-orchestrator/backend/internal/azure"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/database"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/encryption"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/k8s"
@@ -21,13 +22,14 @@ import (
 
 // Server represents the API server
 type Server struct {
-	db           *database.DB
-	k8sClient    *k8s.Client
-	router       *mux.Router
-	encryptor    *encryption.Encryptor
+	db            *database.DB
+	k8sClient     *k8s.Client
+	azureClient   *azure.Client
+	router        *mux.Router
+	encryptor     *encryption.Encryptor
 	oauthProvider *auth.OAuthProvider
-	sessionStore *auth.SessionStore
-	authEnabled  bool
+	sessionStore  *auth.SessionStore
+	authEnabled   bool
 }
 
 // NewServer creates a new API server
@@ -35,6 +37,7 @@ func NewServer(db *database.DB, k8sClient *k8s.Client, encryptor *encryption.Enc
 	s := &Server{
 		db:            db,
 		k8sClient:     k8sClient,
+		azureClient:   azure.NewClient(),
 		router:        mux.NewRouter(),
 		encryptor:     encryptor,
 		oauthProvider: oauthProvider,
@@ -47,6 +50,9 @@ func NewServer(db *database.DB, k8sClient *k8s.Client, encryptor *encryption.Enc
 	if s.authEnabled {
 		go s.cleanupSessions()
 	}
+	
+	// Load existing Azure subscriptions from database
+	s.loadAzureSubscriptions()
 	
 	return s
 }
@@ -109,6 +115,24 @@ func (s *Server) routes() {
 	// Settings
 	api.HandleFunc("/settings", s.getSettings).Methods("GET", "OPTIONS")
 	api.HandleFunc("/settings/{key}", s.updateSetting).Methods("PUT", "OPTIONS")
+
+	// Activities (audit log)
+	api.HandleFunc("/activities", s.listActivities).Methods("GET", "OPTIONS")
+	api.HandleFunc("/activities/{id}", s.getActivity).Methods("GET", "OPTIONS")
+
+	// Cluster operations
+	api.HandleFunc("/clusters/{id}/favorite", s.toggleFavorite).Methods("POST", "OPTIONS")
+	api.HandleFunc("/clusters/{id}/export", s.exportCluster).Methods("GET", "OPTIONS")
+	api.HandleFunc("/resources/export", s.exportResources).Methods("GET", "OPTIONS")
+
+	// Azure AKS integration
+	api.HandleFunc("/azure/subscriptions", s.listAzureSubscriptions).Methods("GET", "OPTIONS")
+	api.HandleFunc("/azure/subscriptions", s.createAzureSubscription).Methods("POST", "OPTIONS")
+	api.HandleFunc("/azure/subscriptions/{id}", s.getAzureSubscription).Methods("GET", "OPTIONS")
+	api.HandleFunc("/azure/subscriptions/{id}", s.deleteAzureSubscription).Methods("DELETE", "OPTIONS")
+	api.HandleFunc("/azure/subscriptions/{id}/test", s.testAzureConnection).Methods("POST", "OPTIONS")
+	api.HandleFunc("/azure/subscriptions/{id}/clusters", s.discoverAKSClusters).Methods("GET", "OPTIONS")
+	api.HandleFunc("/azure/subscriptions/{id}/sync", s.syncAKSClusters).Methods("POST", "OPTIONS")
 
 	// Health check
 	s.router.HandleFunc("/health", s.health).Methods("GET")
@@ -275,9 +299,10 @@ func (s *Server) updateCluster(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 
 	var req struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-		KubeConfig  string `json:"kubeconfig"`
+		Name                string `json:"name"`
+		Description         string `json:"description"`
+		KubeConfig          string `json:"kubeconfig"`
+		HealthCheckInterval *int   `json:"health_check_interval"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -312,6 +337,9 @@ func (s *Server) updateCluster(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.KubeConfig != "" {
 		updates["kubeconfig"] = req.KubeConfig
+	}
+	if req.HealthCheckInterval != nil {
+		updates["health_check_interval"] = *req.HealthCheckInterval
 	}
 
 	if err := s.db.Model(&models.Cluster{}).Where("id = ?", id).Updates(updates).Error; err != nil {
@@ -955,5 +983,476 @@ defer ticker.Stop()
 
 for range ticker.C {
 s.sessionStore.CleanExpired()
+}
+}
+
+// Azure AKS handlers
+
+// loadAzureSubscriptions loads existing Azure subscriptions from database
+func (s *Server) loadAzureSubscriptions() {
+var subscriptions []models.AzureSubscription
+if err := s.db.Find(&subscriptions).Error; err != nil {
+log.Printf("Warning: Failed to load Azure subscriptions: %v", err)
+return
+}
+
+for _, sub := range subscriptions {
+// Decrypt credentials
+decrypted, err := s.encryptor.Decrypt(sub.Credentials)
+if err != nil {
+log.Printf("Warning: Failed to decrypt credentials for subscription %s: %v", sub.ID, err)
+continue
+}
+
+// Decode credentials
+creds, err := azure.DecodeCredentials(decrypted)
+if err != nil {
+log.Printf("Warning: Failed to decode credentials for subscription %s: %v", sub.ID, err)
+continue
+}
+
+s.azureClient.AddCredentials(sub.ID, creds)
+log.Printf("Loaded Azure subscription: %s", sub.Name)
+}
+}
+
+func (s *Server) listAzureSubscriptions(w http.ResponseWriter, r *http.Request) {
+var subscriptions []models.AzureSubscription
+if err := s.db.Find(&subscriptions).Error; err != nil {
+respondError(w, http.StatusInternalServerError, "Failed to list Azure subscriptions")
+return
+}
+
+respondJSON(w, http.StatusOK, subscriptions)
+}
+
+func (s *Server) createAzureSubscription(w http.ResponseWriter, r *http.Request) {
+var req struct {
+Name           string `json:"name"`
+SubscriptionID string `json:"subscription_id"`
+TenantID       string `json:"tenant_id"`
+ClientID       string `json:"client_id"`
+ClientSecret   string `json:"client_secret"`
+}
+
+if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+respondError(w, http.StatusBadRequest, "Invalid request body")
+return
+}
+
+// Validate required fields
+if req.Name == "" || req.SubscriptionID == "" || req.TenantID == "" || req.ClientID == "" || req.ClientSecret == "" {
+respondError(w, http.StatusBadRequest, "Missing required fields")
+return
+}
+
+// Create Azure credentials
+creds := &azure.Credentials{
+TenantID:       req.TenantID,
+ClientID:       req.ClientID,
+ClientSecret:   req.ClientSecret,
+SubscriptionID: req.SubscriptionID,
+}
+
+// Test connection
+s.azureClient.AddCredentials(req.SubscriptionID, creds)
+if err := s.azureClient.TestConnection(r.Context(), req.SubscriptionID); err != nil {
+s.azureClient.RemoveCredentials(req.SubscriptionID)
+respondError(w, http.StatusUnauthorized, fmt.Sprintf("Failed to authenticate with Azure: %v", err))
+return
+}
+
+// Encode credentials
+encoded, err := azure.EncodeCredentials(creds)
+if err != nil {
+s.azureClient.RemoveCredentials(req.SubscriptionID)
+respondError(w, http.StatusInternalServerError, "Failed to encode credentials")
+return
+}
+
+// Encrypt credentials
+encrypted, err := s.encryptor.Encrypt(encoded)
+if err != nil {
+s.azureClient.RemoveCredentials(req.SubscriptionID)
+respondError(w, http.StatusInternalServerError, "Failed to encrypt credentials")
+return
+}
+
+// Create database record
+subscription := models.AzureSubscription{
+ID:          req.SubscriptionID,
+Name:        req.Name,
+TenantID:    req.TenantID,
+Credentials: encrypted,
+Status:      "healthy",
+}
+
+if err := s.db.Create(&subscription).Error; err != nil {
+s.azureClient.RemoveCredentials(req.SubscriptionID)
+respondError(w, http.StatusInternalServerError, "Failed to save Azure subscription")
+return
+}
+
+respondJSON(w, http.StatusCreated, subscription)
+}
+
+func (s *Server) getAzureSubscription(w http.ResponseWriter, r *http.Request) {
+vars := mux.Vars(r)
+id := vars["id"]
+
+var subscription models.AzureSubscription
+if err := s.db.First(&subscription, "id = ?", id).Error; err != nil {
+respondError(w, http.StatusNotFound, "Azure subscription not found")
+return
+}
+
+respondJSON(w, http.StatusOK, subscription)
+}
+
+func (s *Server) deleteAzureSubscription(w http.ResponseWriter, r *http.Request) {
+vars := mux.Vars(r)
+id := vars["id"]
+
+// Delete from database
+if err := s.db.Delete(&models.AzureSubscription{}, "id = ?", id).Error; err != nil {
+respondError(w, http.StatusInternalServerError, "Failed to delete Azure subscription")
+return
+}
+
+// Remove from Azure client
+s.azureClient.RemoveCredentials(id)
+
+// Delete all associated clusters
+if err := s.db.Where("source = ? AND source_id LIKE ?", "azure-aks", fmt.Sprintf("/subscriptions/%s/%%", id)).Delete(&models.Cluster{}).Error; err != nil {
+log.Printf("Warning: Failed to delete associated clusters: %v", err)
+}
+
+respondJSON(w, http.StatusOK, map[string]string{"message": "Azure subscription deleted successfully"})
+}
+
+func (s *Server) testAzureConnection(w http.ResponseWriter, r *http.Request) {
+vars := mux.Vars(r)
+id := vars["id"]
+
+if err := s.azureClient.TestConnection(r.Context(), id); err != nil {
+respondError(w, http.StatusUnauthorized, fmt.Sprintf("Connection test failed: %v", err))
+return
+}
+
+respondJSON(w, http.StatusOK, map[string]string{"status": "healthy", "message": "Connection successful"})
+}
+
+func (s *Server) discoverAKSClusters(w http.ResponseWriter, r *http.Request) {
+vars := mux.Vars(r)
+subscriptionID := vars["id"]
+
+clusters, err := s.azureClient.DiscoverClusters(r.Context(), subscriptionID)
+if err != nil {
+respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to discover AKS clusters: %v", err))
+return
+}
+
+respondJSON(w, http.StatusOK, map[string]interface{}{
+"count":    len(clusters),
+"clusters": clusters,
+})
+}
+
+func (s *Server) syncAKSClusters(w http.ResponseWriter, r *http.Request) {
+vars := mux.Vars(r)
+subscriptionID := vars["id"]
+
+// Discover clusters
+aksClusters, err := s.azureClient.DiscoverClusters(r.Context(), subscriptionID)
+if err != nil {
+respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to discover AKS clusters: %v", err))
+return
+}
+
+var syncedClusters []models.Cluster
+var errors []string
+
+for _, aksCluster := range aksClusters {
+// Generate kubeconfig with Azure AD auth
+kubeconfig, err := s.azureClient.GenerateKubeconfig(r.Context(), aksCluster)
+if err != nil {
+errors = append(errors, fmt.Sprintf("Failed to generate kubeconfig for %s: %v", aksCluster.Name, err))
+continue
+}
+
+// Encrypt kubeconfig
+encryptedKubeconfig, err := s.encryptor.Encrypt(kubeconfig)
+if err != nil {
+errors = append(errors, fmt.Sprintf("Failed to encrypt kubeconfig for %s: %v", aksCluster.Name, err))
+continue
+}
+
+// Create or update cluster record
+clusterID := fmt.Sprintf("aks-%s", aksCluster.Name)
+cluster := models.Cluster{
+ID:          clusterID,
+Name:        aksCluster.Name,
+Description: fmt.Sprintf("AKS cluster in %s (%s nodes, k8s %s)", aksCluster.Location, fmt.Sprint(aksCluster.NodeCount), aksCluster.KubernetesVersion),
+KubeConfig:  encryptedKubeconfig,
+Status:      "unknown",
+Source:      "azure-aks",
+SourceID:    aksCluster.ID,
+}
+
+// Check if cluster already exists
+var existing models.Cluster
+if err := s.db.First(&existing, "id = ?", clusterID).Error; err == nil {
+// Update existing cluster
+cluster.CreatedAt = existing.CreatedAt
+if err := s.db.Save(&cluster).Error; err != nil {
+errors = append(errors, fmt.Sprintf("Failed to update cluster %s: %v", aksCluster.Name, err))
+continue
+}
+} else {
+// Create new cluster
+if err := s.db.Create(&cluster).Error; err != nil {
+errors = append(errors, fmt.Sprintf("Failed to create cluster %s: %v", aksCluster.Name, err))
+continue
+}
+}
+
+// Add to k8s client
+if err := s.k8sClient.AddCluster(clusterID, kubeconfig); err != nil {
+errors = append(errors, fmt.Sprintf("Failed to add cluster %s to k8s client: %v", aksCluster.Name, err))
+continue
+}
+
+// Check health
+status, err := s.k8sClient.CheckClusterHealth(clusterID)
+if err != nil {
+log.Printf("Warning: Failed to check health for cluster %s: %v", aksCluster.Name, err)
+status = "unhealthy"
+}
+cluster.Status = status
+s.db.Save(&cluster)
+
+syncedClusters = append(syncedClusters, cluster)
+}
+
+// Update subscription last synced time and cluster count
+if err := s.db.Model(&models.AzureSubscription{}).
+Where("id = ?", subscriptionID).
+Updates(map[string]interface{}{
+"last_synced_at": time.Now(),
+"cluster_count":  len(syncedClusters),
+}).Error; err != nil {
+log.Printf("Warning: Failed to update subscription sync time: %v", err)
+}
+
+response := map[string]interface{}{
+"synced":   len(syncedClusters),
+"clusters": syncedClusters,
+}
+
+if len(errors) > 0 {
+response["errors"] = errors
+}
+
+respondJSON(w, http.StatusOK, response)
+}
+
+// toggleFavorite toggles the favorite status of a cluster
+func (s *Server) toggleFavorite(w http.ResponseWriter, r *http.Request) {
+vars := mux.Vars(r)
+clusterID := vars["id"]
+
+var cluster models.Cluster
+if err := s.db.First(&cluster, "id = ?", clusterID).Error; err != nil {
+respondError(w, http.StatusNotFound, "Cluster not found")
+return
+}
+
+// Toggle favorite status
+cluster.IsFavorite = !cluster.IsFavorite
+
+if err := s.db.Save(&cluster).Error; err != nil {
+log.Printf("Failed to toggle favorite: %v", err)
+respondError(w, http.StatusInternalServerError, "Failed to update cluster")
+return
+}
+
+// Log activity
+s.logActivity("toggle_favorite", "cluster", clusterID, cluster.Name, clusterID, cluster.Name, "success", "")
+
+respondJSON(w, http.StatusOK, cluster)
+}
+
+// listActivities returns recent activities
+func (s *Server) listActivities(w http.ResponseWriter, r *http.Request) {
+limitStr := r.URL.Query().Get("limit")
+limit := 50
+if limitStr != "" {
+if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
+limit = parsedLimit
+}
+}
+
+clusterID := r.URL.Query().Get("cluster_id")
+
+var activities []models.Activity
+query := s.db.Order("created_at DESC").Limit(limit)
+
+if clusterID != "" {
+query = query.Where("cluster_id = ?", clusterID)
+}
+
+if err := query.Find(&activities).Error; err != nil {
+log.Printf("Failed to list activities: %v", err)
+respondError(w, http.StatusInternalServerError, "Failed to list activities")
+return
+}
+
+respondJSON(w, http.StatusOK, activities)
+}
+
+// getActivity returns a single activity by ID
+func (s *Server) getActivity(w http.ResponseWriter, r *http.Request) {
+vars := mux.Vars(r)
+id := vars["id"]
+
+var activity models.Activity
+if err := s.db.First(&activity, "id = ?", id).Error; err != nil {
+respondError(w, http.StatusNotFound, "Activity not found")
+return
+}
+
+respondJSON(w, http.StatusOK, activity)
+}
+
+// exportCluster exports cluster configuration as JSON or YAML
+func (s *Server) exportCluster(w http.ResponseWriter, r *http.Request) {
+vars := mux.Vars(r)
+clusterID := vars["id"]
+format := r.URL.Query().Get("format")
+if format == "" {
+format = "json"
+}
+
+var cluster models.Cluster
+if err := s.db.First(&cluster, "id = ?", clusterID).Error; err != nil {
+respondError(w, http.StatusNotFound, "Cluster not found")
+return
+}
+
+// Get resources for this cluster
+var resources []models.FluxResource
+if err := s.db.Where("cluster_id = ?", clusterID).Find(&resources).Error; err != nil {
+log.Printf("Failed to get resources: %v", err)
+respondError(w, http.StatusInternalServerError, "Failed to get resources")
+return
+}
+
+exportData := map[string]interface{}{
+"cluster":   cluster,
+"resources": resources,
+"exported_at": time.Now(),
+}
+
+if format == "csv" {
+// CSV export for resources
+w.Header().Set("Content-Type", "text/csv")
+w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s-resources.csv", cluster.Name))
+
+// Write CSV header
+fmt.Fprintf(w, "Kind,Namespace,Name,Status,Message,LastReconcile\n")
+
+// Write rows
+for _, res := range resources {
+fmt.Fprintf(w, "%s,%s,%s,%s,\"%s\",%s\n",
+res.Kind, res.Namespace, res.Name, res.Status,
+res.Message, res.LastReconcile)
+}
+} else {
+// JSON export
+w.Header().Set("Content-Type", "application/json")
+w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s-export.json", cluster.Name))
+json.NewEncoder(w).Encode(exportData)
+}
+
+// Log activity
+s.logActivity("export", "cluster", clusterID, cluster.Name, clusterID, cluster.Name, "success", fmt.Sprintf("Exported as %s", format))
+}
+
+// exportResources exports all resources across all clusters
+func (s *Server) exportResources(w http.ResponseWriter, r *http.Request) {
+format := r.URL.Query().Get("format")
+if format == "" {
+format = "json"
+}
+
+status := r.URL.Query().Get("status")
+kind := r.URL.Query().Get("kind")
+
+query := s.db.Model(&models.FluxResource{})
+if status != "" {
+query = query.Where("status = ?", status)
+}
+if kind != "" {
+query = query.Where("kind = ?", kind)
+}
+
+var resources []models.FluxResource
+if err := query.Find(&resources).Error; err != nil {
+log.Printf("Failed to get resources: %v", err)
+respondError(w, http.StatusInternalServerError, "Failed to get resources")
+return
+}
+
+if format == "csv" {
+w.Header().Set("Content-Type", "text/csv")
+w.Header().Set("Content-Disposition", "attachment; filename=flux-resources.csv")
+
+// Write CSV header
+fmt.Fprintf(w, "ClusterID,Kind,Namespace,Name,Status,Message,LastReconcile\n")
+
+// Write rows
+for _, res := range resources {
+fmt.Fprintf(w, "%s,%s,%s,%s,%s,\"%s\",%s\n",
+res.ClusterID, res.Kind, res.Namespace, res.Name, res.Status,
+res.Message, res.LastReconcile)
+}
+} else {
+// JSON export
+w.Header().Set("Content-Type", "application/json")
+w.Header().Set("Content-Disposition", "attachment; filename=flux-resources.json")
+
+exportData := map[string]interface{}{
+"resources": resources,
+"count":     len(resources),
+"exported_at": time.Now(),
+"filters": map[string]string{
+"status": status,
+"kind":   kind,
+},
+}
+
+json.NewEncoder(w).Encode(exportData)
+}
+
+// Log activity
+s.logActivity("export", "resources", "all", fmt.Sprintf("%d resources", len(resources)), "", "", "success", fmt.Sprintf("Exported as %s", format))
+}
+
+// logActivity logs an action to the activity table
+func (s *Server) logActivity(action, resourceType, resourceID, resourceName, clusterID, clusterName, status, message string) {
+activity := models.Activity{
+Action:       action,
+ResourceType: resourceType,
+ResourceID:   resourceID,
+ResourceName: resourceName,
+ClusterID:    clusterID,
+ClusterName:  clusterName,
+Status:       status,
+Message:      message,
+UserID:       "system", // TODO: Get from auth context
+}
+
+if err := s.db.Create(&activity).Error; err != nil {
+log.Printf("Warning: Failed to log activity: %v", err)
 }
 }

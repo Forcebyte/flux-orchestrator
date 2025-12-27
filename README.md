@@ -5,6 +5,7 @@ A comprehensive multi-cluster GitOps management platform for Flux CD, providing 
 ## Features
 
 - 🎯 **Multi-Cluster Management**: Monitor and manage Flux resources across multiple Kubernetes clusters from a single interface
+- ☁️ **Azure AKS Integration**: Automatically discover and sync AKS clusters using Azure service principals
 - 📊 **Unified Dashboard**: ArgoCD-inspired UI with real-time status of all Flux resources
 - 🔄 **Resource Synchronization**: Trigger reconciliation for individual resources or entire clusters
 - 💾 **Flexible Database Backend**: Support for PostgreSQL and MySQL
@@ -378,6 +379,18 @@ frontend/
 - `description`: Optional description
 - `kubeconfig`: Encrypted kubeconfig
 - `status`: Health status (healthy/unhealthy/unknown)
+- `source`: Cluster source (manual/azure-aks)
+- `source_id`: Azure resource ID or other source identifier
+- `created_at`, `updated_at`: Timestamps
+
+**azure_subscriptions**
+- `id`: Azure subscription ID
+- `name`: Subscription name
+- `tenant_id`: Azure tenant ID
+- `credentials`: Encrypted service principal credentials
+- `status`: Connection status (active/error/unknown)
+- `cluster_count`: Number of AKS clusters
+- `last_synced_at`: Last sync timestamp
 - `created_at`, `updated_at`: Timestamps
 
 **flux_resources**
@@ -389,6 +402,50 @@ frontend/
 - `message`: Status message
 - `last_reconcile`: Last reconciliation timestamp
 - `metadata`: JSON blob with full resource data
+
+## Azure AKS Integration
+
+Flux Orchestrator can automatically discover and manage AKS clusters using Azure service principals. This provides seamless integration with your Azure infrastructure without manually exporting kubeconfig files.
+
+### Prerequisites
+
+1. **Azure Service Principal** with permissions:
+   - Azure Kubernetes Service Cluster User Role
+   - Reader role on subscription or resource groups
+
+2. **kubelogin** installed on the server running Flux Orchestrator:
+   ```bash
+   # Install kubelogin
+   brew install Azure/kubelogin/kubelogin  # macOS
+   # OR download from: https://github.com/Azure/kubelogin/releases
+   ```
+
+### Setup
+
+1. **Create a Service Principal**:
+   ```bash
+   az ad sp create-for-rbac --name flux-orchestrator-sp --role "Azure Kubernetes Service Cluster User Role" --scopes /subscriptions/{subscription-id}
+   ```
+
+2. **Note the credentials** from the output:
+   - `appId` → Client ID
+   - `password` → Client Secret
+   - `tenant` → Tenant ID
+
+3. **Add Azure Subscription** in the UI:
+   - Go to Settings → Azure AKS tab
+   - Click "Add Subscription"
+   - Enter your subscription details and service principal credentials
+   - Click "Test Connection" to verify
+
+4. **Discover and Sync Clusters**:
+   - Click the 🔍 icon to discover AKS clusters
+   - Review the list of discovered clusters
+   - Click "Sync" to import all clusters
+
+Clusters imported from Azure will be marked with a ☁️ badge and can be managed like any other cluster.
+
+For detailed Azure integration documentation, see [docs/AZURE_AKS.md](docs/AZURE_AKS.md).
 
 ## Contributing
 

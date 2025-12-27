@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { settingsApi } from '../api';
+import AzureSubscriptions from './AzureSubscriptions';
 import '../styles/Settings.css';
 
 const Settings: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'general' | 'azure'>('general');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -67,15 +69,32 @@ const Settings: React.FC = () => {
         <h2>⚙️ Settings</h2>
       </div>
 
-      {error && (
-        <div className="settings-error">
-          {error}
-        </div>
-      )}
+      <div className="settings-tabs">
+        <button
+          className={`tab-button ${activeTab === 'general' ? 'active' : ''}`}
+          onClick={() => setActiveTab('general')}
+        >
+          General
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'azure' ? 'active' : ''}`}
+          onClick={() => setActiveTab('azure')}
+        >
+          Azure AKS
+        </button>
+      </div>
 
-      <div className="settings-content">
-        <div className="setting-section">
-          <h3>Resource Synchronization</h3>
+      {activeTab === 'general' && (
+        <>
+          {error && (
+            <div className="settings-error">
+              {error}
+            </div>
+          )}
+
+          <div className="settings-content">
+            <div className="setting-section">
+              <h3>Resource Synchronization</h3>
           <div className="setting-item">
             <label htmlFor="auto-sync-interval">
               <strong>Auto-Sync Interval (minutes)</strong>
@@ -107,17 +126,23 @@ const Settings: React.FC = () => {
           </div>
         </div>
 
-        <div className="setting-section">
-          <h3>Information</h3>
-          <div className="info-box">
-            <p>
-              <strong>About Auto-Sync:</strong> The system periodically syncs all Flux resources 
-              from healthy clusters to keep the database up to date. This includes Kustomizations, 
-              HelmReleases, GitRepositories, and other Flux resources.
-            </p>
+            <div className="setting-section">
+              <h3>Information</h3>
+              <div className="info-box">
+                <p>
+                  <strong>About Auto-Sync:</strong> The system periodically syncs all Flux resources 
+                  from healthy clusters to keep the database up to date. This includes Kustomizations, 
+                  HelmReleases, GitRepositories, and other Flux resources.
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
+
+      {activeTab === 'azure' && (
+        <AzureSubscriptions />
+      )}
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import Dashboard from './components/Dashboard';
 import Clusters from './components/Clusters';
 import ClusterDetail from './components/ClusterDetail';
@@ -11,6 +12,7 @@ import './App.css';
 const Sidebar: React.FC = () => {
   const location = useLocation();
   const { user, authEnabled, logout } = useAuth();
+  const { darkMode, toggleDarkMode } = useTheme();
 
   return (
     <div className="sidebar">
@@ -37,6 +39,14 @@ const Sidebar: React.FC = () => {
         >
           Settings
         </Link>
+        <button
+          onClick={toggleDarkMode}
+          className="nav-item"
+          style={{ border: 'none', background: 'transparent', textAlign: 'left', width: '100%' }}
+          title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {darkMode ? '☀️' : '🌙'} {darkMode ? 'Light Mode' : 'Dark Mode'}
+        </button>
       </div>
       {authEnabled && user && (
         <div style={{
@@ -114,11 +124,13 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <Router>
-        <AppContent />
-      </Router>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <Router>
+          <AppContent />
+        </Router>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 
