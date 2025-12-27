@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { azureApi } from '../api';
-import { AzureSubscription, AKSCluster, AzureCredentials } from '../types';
+import { AzureSubscription, AKSCluster } from '../types';
 import '../styles/AzureSubscriptions.css';
 
 const AzureSubscriptions: React.FC = () => {

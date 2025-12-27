@@ -17,7 +17,14 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
@@ -50,6 +57,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
           flavor: |
             latest=false
+            suffix=-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -58,25 +66,58 @@ jobs:
           push: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
+          platforms: ${{ matrix.platform }}
           build-args: |
             BUILDKIT_INLINE_CACHE=1
+
+  create-manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for manifest
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr,prefix=pr-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+          flavor: |
+            latest=false
+
+      - name: Create and push multi-arch manifest
+        run: |
+          TAGS="${{ steps.meta.outputs.tags }}"
+          for TAG in $TAGS; do
+            docker buildx imagetools create -t $TAG \
+              ${TAG}-amd64 \
+              ${TAG}-arm64
+          done
 
       - name: Image tags summary
         run: |
           echo "### Docker Image Tags :rocket:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The following tags were created:" >> $GITHUB_STEP_SUMMARY
+          echo "The following multi-arch tags were created:" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "**Pull Request Build**" >> $GITHUB_STEP_SUMMARY
-            echo "To use this image in testing, update your deployment to use:" >> $GITHUB_STEP_SUMMARY
-            echo '```yaml' >> $GITHUB_STEP_SUMMARY
-            echo "image: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
           fi
