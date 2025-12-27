@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/Forcebyte/flux-orchestrator/backend/internal/models"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -78,9 +79,39 @@ func New(cfg Config) (*DB, error) {
 }
 
 // InitSchema initializes the database schema using GORM AutoMigrate
-func (db *DB) InitSchema(models ...interface{}) error {
-	if err := db.AutoMigrate(models...); err != nil {
+func (db *DB) InitSchema(entities ...interface{}) error {
+	if err := db.AutoMigrate(entities...); err != nil {
 		return fmt.Errorf("failed to initialize schema: %w", err)
+	}
+
+	// Backward-compat migration: rename settings.key -> settings.setting_key
+	// Some installations may have created the column as `key` (a reserved word in MySQL),
+	// while the model now uses `setting_key`. AutoMigrate will not rename columns, so we
+	// check and perform a safe rename once.
+	migrator := db.Migrator()
+	if migrator.HasTable(&models.Setting{}) {
+		hasSettingKey := migrator.HasColumn(&models.Setting{}, "setting_key")
+		hasLegacyKey := migrator.HasColumn(&models.Setting{}, "key")
+
+		if !hasSettingKey && hasLegacyKey {
+			var renameErr error
+			switch db.Dialector.Name() {
+			case "mysql":
+				// Preserve size and NOT NULL; primary key will be preserved if it existed
+				renameErr = db.Exec("ALTER TABLE settings CHANGE COLUMN `key` `setting_key` VARCHAR(100) NOT NULL").Error
+			case "postgres":
+				// Simple column rename for Postgres
+				renameErr = db.Exec(`ALTER TABLE "settings" RENAME COLUMN "key" TO "setting_key"`).Error
+			default:
+				log.Printf("Unsupported dialect for settings column rename: %s", db.Dialector.Name())
+			}
+
+			if renameErr != nil {
+				log.Printf("Warning: failed to rename settings.key to settings.setting_key: %v", renameErr)
+			} else {
+				log.Printf("Renamed settings.key to settings.setting_key for compatibility")
+			}
+		}
 	}
 
 	log.Println("Database schema initialized successfully")

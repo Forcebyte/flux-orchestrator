@@ -60,7 +60,9 @@ const Settings: React.FC = () => {
 
       await settingsApi.update('auto_sync_interval_minutes', autoSyncInterval);
       await loadSettings();
-      alert('Auto-sync interval updated successfully! Changes will take effect within 30 seconds.');
+      // Use inline success message rather than alert
+      setError('✅ Auto-sync interval saved. Changes apply within ~30 seconds.');
+      setTimeout(() => setError(null), 4000);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to update setting');
     } finally {
@@ -81,7 +83,8 @@ const Settings: React.FC = () => {
 
       await settingsApi.update('audit_log_retention_days', auditLogRetention);
       await loadSettings();
-      alert('Audit log retention updated successfully!');
+      setError('✅ Audit log retention updated');
+      setTimeout(() => setError(null), 4000);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to update setting');
     } finally {

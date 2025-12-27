@@ -1,21 +1,18 @@
-# Flux Orchestrator
+<div align="center">
 
-A comprehensive multi-cluster GitOps management platform for Flux CD, providing a centralized UI and API similar to ArgoCD for managing Flux across multiple Kubernetes clusters.
+<img src=".github/logo.png" alt="Flux Orchestrator Logo" width="200"/>
 
-## Features
+# Flux Orchestrator (v2)
 
-- 🎯 **Multi-Cluster Management**: Monitor and manage Flux resources across multiple Kubernetes clusters from a single interface
-- ☁️ **Azure AKS Integration**: Automatically discover and sync AKS clusters using Azure service principals
-- 📊 **Unified Dashboard**: ArgoCD-inspired UI with real-time status of all Flux resources
-- 🔄 **Resource Synchronization**: Trigger reconciliation for individual resources or entire clusters
-- 💾 **Flexible Database Backend**: Support for PostgreSQL and MySQL
-- 🔐 **Secure**: RBAC-enabled with Fernet-encrypted kubeconfig storage
-- 🔒 **Encryption at Rest**: All sensitive kubeconfig data is encrypted using Fernet (AES-128-CBC with HMAC-SHA256)
-- � **OAuth Authentication**: Optional OAuth support with GitHub and Microsoft Entra (Azure AD)
-- 🌳 **Resource Tree View**: Visualize Kustomization resources and their managed workloads
-- 📝 **Resource Management**: View logs, restart workloads, scale deployments, and manage child resources
-- ⚡ **Auto-Sync**: Configurable automatic resource synchronization
-- �🚀 **Easy Deployment**: Deploy to a central cluster with Kubernetes manifests
+<p><i>A comprehensive multi-cluster GitOps management platform for Flux CD</i></p>
+
+</div>
+
+
+
+This service provides a centralized UI and API similar to ArgoCD for managing Flux across multiple Kubernetes clusters.
+
+This allows an easy to access and manage method to view, validate, and remediate FluxCD configurations on clusters at scale
 
 ## Architecture
 
@@ -122,7 +119,7 @@ The Flux Orchestrator consists of:
 
 #### Using Pre-built Docker Image from GitHub Container Registry
 
-The easiest way to deploy is using our pre-built images:
+The easiest way to deploy is using one of the pre-built images:
 
 ```bash
 # Pull the latest image
@@ -186,22 +183,6 @@ To use an external PostgreSQL or MySQL database instead of the bundled one:
    ```
 3. Update the Secret with your database password
 
-#### Building Your Own Docker Image
-
-1. **Build the Docker image**
-   ```bash
-   docker build -t flux-orchestrator:latest .
-   ```
-
-2. **Push to your registry**
-   ```bash
-   docker tag flux-orchestrator:latest your-registry/flux-orchestrator:latest
-   docker push your-registry/flux-orchestrator:latest
-   ```
-
-3. **Update Kubernetes manifests**
-   Edit `deploy/kubernetes/manifests.yaml` and change the image reference
-
 ## Usage
 
 ### Adding a Cluster
@@ -237,25 +218,6 @@ The dashboard provides an overview of all resources across all clusters:
 - Total resource count
 - Status breakdown (Ready/Not Ready/Unknown)
 - Resources grouped by cluster
-
-## API Documentation
-
-### Clusters
-
-- `GET /api/v1/clusters` - List all clusters
-- `POST /api/v1/clusters` - Create a new cluster
-- `GET /api/v1/clusters/{id}` - Get cluster details
-- `PUT /api/v1/clusters/{id}` - Update cluster
-- `DELETE /api/v1/clusters/{id}` - Delete cluster
-- `GET /api/v1/clusters/{id}/health` - Check cluster health
-- `POST /api/v1/clusters/{id}/sync` - Sync cluster resources
-
-### Resources
-
-- `GET /api/v1/resources` - List all resources (with optional `?kind=` filter)
-- `GET /api/v1/clusters/{id}/resources` - List resources for a cluster
-- `GET /api/v1/resources/{id}` - Get resource details
-- `POST /api/v1/resources/reconcile` - Trigger resource reconciliation
 
 ## Configuration
 
@@ -303,12 +265,6 @@ Flux Orchestrator supports optional OAuth authentication with GitHub and Microso
 
 For detailed setup instructions, see **[docs/OAUTH.md](docs/OAUTH.md)**.
 
-**Features:**
-- ✅ GitHub and Microsoft Entra support
-- ✅ Optional user allow-list
-- ✅ 24-hour session management
-- ✅ CSRF protection
-- ✅ Modern login UI
 
 ## Security
 
@@ -326,15 +282,6 @@ All kubeconfig data is encrypted at rest using **Fernet** (AES-128-CBC with HMAC
 
 For more details, see [docs/ENCRYPTION.md](docs/ENCRYPTION.md).
 
-### Best Practices
-
-- 🔑 Never commit the `ENCRYPTION_KEY` to version control
-- 🔐 Rotate encryption keys periodically
-- 🛡️ Limit database access to authorized personnel only
-- 📝 Enable database audit logging
-- 🔒 Use Kubernetes RBAC to restrict access to secrets
-- 🌐 Use TLS/HTTPS for all network communication
-
 ### RBAC Permissions
 
 The orchestrator requires the following Kubernetes permissions:
@@ -344,64 +291,6 @@ The orchestrator requires the following Kubernetes permissions:
 - List access to namespaces
 
 See `deploy/kubernetes/manifests.yaml` for the complete RBAC configuration.
-
-## Architecture Details
-
-### Backend (Go)
-
-```
-backend/
-├── cmd/server/         # Main application entry point
-└── internal/
-    ├── api/           # HTTP handlers and routing
-    ├── database/      # Database connection and schema
-    ├── k8s/           # Kubernetes client wrapper
-    └── models/        # Data models
-```
-
-### Frontend (React/TypeScript)
-
-```
-frontend/
-├── src/
-│   ├── components/    # React components
-│   ├── api.ts        # API client
-│   ├── types.ts      # TypeScript types
-│   └── App.tsx       # Main application
-└── public/           # Static assets
-```
-
-### Database Schema
-
-**clusters**
-- `id`: Unique cluster identifier
-- `name`: Cluster name
-- `description`: Optional description
-- `kubeconfig`: Encrypted kubeconfig
-- `status`: Health status (healthy/unhealthy/unknown)
-- `source`: Cluster source (manual/azure-aks)
-- `source_id`: Azure resource ID or other source identifier
-- `created_at`, `updated_at`: Timestamps
-
-**azure_subscriptions**
-- `id`: Azure subscription ID
-- `name`: Subscription name
-- `tenant_id`: Azure tenant ID
-- `credentials`: Encrypted service principal credentials
-- `status`: Connection status (active/error/unknown)
-- `cluster_count`: Number of AKS clusters
-- `last_synced_at`: Last sync timestamp
-- `created_at`, `updated_at`: Timestamps
-
-**flux_resources**
-- `id`: Unique resource identifier
-- `cluster_id`: Foreign key to clusters
-- `kind`: Resource type (Kustomization, HelmRelease, etc.)
-- `name`, `namespace`: Resource identifiers
-- `status`: Resource status (Ready/NotReady/Unknown)
-- `message`: Status message
-- `last_reconcile`: Last reconciliation timestamp
-- `metadata`: JSON blob with full resource data
 
 ## Azure AKS Integration
 

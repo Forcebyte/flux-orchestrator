@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { resourceApi } from '../api';
 import '../styles/ResourceActionMenu.css';
+import Toast from './Toast';
+import { useToast } from '../hooks/useToast';
 
 interface ResourceActionMenuProps {
   clusterId: string;
@@ -23,6 +25,7 @@ const ResourceActionMenu: React.FC<ResourceActionMenuProps> = ({
   const [showScaleDialog, setShowScaleDialog] = useState(false);
   const [replicas, setReplicas] = useState<number>(1);
   const [loading, setLoading] = useState(false);
+  const { toasts, success, error, removeToast } = useToast();
 
   const canScale = ['Deployment', 'StatefulSet', 'ReplicaSet'].includes(kind);
   const canRestart = ['Deployment', 'StatefulSet', 'DaemonSet'].includes(kind);
@@ -30,15 +33,13 @@ const ResourceActionMenu: React.FC<ResourceActionMenuProps> = ({
   const canDelete = kind === 'Pod';
 
   const handleRestart = async () => {
-    if (!window.confirm(`Restart ${kind} ${namespace}/${name}?`)) return;
-    
     setLoading(true);
     try {
       await resourceApi.restart(clusterId, kind, namespace, name);
-      alert(`Successfully triggered restart for ${kind} ${namespace}/${name}`);
+      success(`Restart triggered for ${kind} ${namespace}/${name}`);
       onActionComplete?.();
     } catch (err: any) {
-      alert(`Failed to restart: ${err.response?.data?.error || err.message}`);
+      error(`Failed to restart: ${err.response?.data?.error || err.message}`);
     } finally {
       setLoading(false);
       setShowMenu(false);
@@ -49,10 +50,16 @@ const ResourceActionMenu: React.FC<ResourceActionMenuProps> = ({
     setLoading(true);
     try {
       await resourceApi.scale(clusterId, kind, namespace, name, replicas);
-      alert(`Successfully scaled ${kind} ${namespace}/${name} to ${replicas} replicas`);
+      success(`Scaled ${kind} ${namespace}/${name} to ${replicas}`);
       onActionComplete?.();
     } catch (err: any) {
-      alert(`Failed to scale: ${err.response?.data?.error || err.message}`);
+      const msg = err.response?.data?.error || err.message;
+      // Special-case RBAC forbidden with a clearer message
+      if (msg && msg.toLowerCase().includes('forbidden')) {
+        error('Insufficient permissions to scale this resource. Ensure the orchestrator service account has get/update permissions for deployments in this namespace.');
+      } else {
+        error(`Failed to scale: ${msg}`);
+      }
     } finally {
       setLoading(false);
       setShowScaleDialog(false);
@@ -61,15 +68,13 @@ const ResourceActionMenu: React.FC<ResourceActionMenuProps> = ({
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(`Delete Pod ${namespace}/${name}? This action cannot be undone.`)) return;
-    
     setLoading(true);
     try {
       await resourceApi.deletePod(clusterId, namespace, name);
-      alert(`Successfully deleted Pod ${namespace}/${name}`);
+      success(`Deleted Pod ${namespace}/${name}`);
       onActionComplete?.();
     } catch (err: any) {
-      alert(`Failed to delete: ${err.response?.data?.error || err.message}`);
+      error(`Failed to delete: ${err.response?.data?.error || err.message}`);
     } finally {
       setLoading(false);
       setShowMenu(false);
@@ -87,6 +92,7 @@ const ResourceActionMenu: React.FC<ResourceActionMenuProps> = ({
 
   return (
     <div className="resource-action-menu">
+      <Toast toasts={toasts} removeToast={removeToast} />
       <button
         className="action-menu-trigger"
         onClick={(e) => {

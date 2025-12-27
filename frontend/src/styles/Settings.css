@@ -434,11 +434,12 @@
 .btn-confirm-delete {
   padding: 10px 24px;
   background: #dc3545;
-  color: white;
+  color: #ffffff;
   border: none;
   border-radius: 6px;
   font-size: 1rem;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.2px;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -449,7 +450,7 @@
 }
 
 .btn-confirm-delete:disabled {
-  opacity: 0.5;
+  opacity: 0.7;
   cursor: not-allowed;
 }
 
