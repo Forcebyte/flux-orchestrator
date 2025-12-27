@@ -691,7 +691,7 @@ func (s *Server) updateSetting(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	// Save will update if exists, create if not
-	if err := s.db.Where("setting_key = ?", key).Assign(models.Setting{Value: req.Value}).FirstOrCreate(&setting).Error; err != nil {
+	if err := s.db.Where(models.Setting{Key: key}).Assign(models.Setting{Value: req.Value}).FirstOrCreate(&setting).Error; err != nil {
 		s.logActivity("update", "setting", key, key, "", "", "failed", fmt.Sprintf("Database error: %v", err))
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to save setting: %v", err))
 		return

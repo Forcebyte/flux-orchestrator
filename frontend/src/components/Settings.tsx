@@ -11,6 +11,7 @@ const Settings: React.FC = () => {
   const [autoSyncInterval, setAutoSyncInterval] = useState<string>('5');
   const [auditLogRetention, setAuditLogRetention] = useState<string>('90');
   const [cleaningUp, setCleaningUp] = useState(false);
+  const [showCleanupModal, setShowCleanupModal] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -88,11 +89,13 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleCleanupNow = async () => {
-    if (!confirm('This will delete audit logs older than ' + auditLogRetention + ' days. Continue?')) {
-      return;
-    }
+  const handleCleanupNow = () => {
+    setShowCleanupModal(true);
+  };
 
+  const confirmCleanup = async () => {
+    setShowCleanupModal(false);
+    
     try {
       setCleaningUp(true);
       setError(null);
@@ -105,9 +108,13 @@ const Settings: React.FC = () => {
       }
 
       const data = await response.json();
-      alert(`Cleanup completed. ${data.remaining_activities} activities remaining.`);
+      setError(null);
+      // Show success message by temporarily using error field
+      const successMsg = `✅ Cleanup completed successfully! ${data.remaining_activities} activities remaining.`;
+      setError(successMsg);
+      setTimeout(() => setError(null), 5000);
     } catch (err: any) {
-      setError('Failed to cleanup audit logs');
+      setError('❌ Failed to cleanup audit logs');
     } finally {
       setCleaningUp(false);
     }
@@ -118,6 +125,56 @@ const Settings: React.FC = () => {
   }
 
   return (
+    <>
+      {showCleanupModal && (
+        <div className="modal-overlay" onClick={() => setShowCleanupModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>🗑️ Cleanup Audit Logs</h3>
+              <button 
+                className="modal-close" 
+                onClick={() => setShowCleanupModal(false)}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="warning-box">
+                <span className="warning-icon">⚠️</span>
+                <div>
+                  <p><strong>This action cannot be undone</strong></p>
+                  <p>This will permanently delete all audit logs older than <strong>{auditLogRetention} days</strong>.</p>
+                </div>
+              </div>
+              <p>Audit logs include records of:</p>
+              <ul>
+                <li>Cluster management operations</li>
+                <li>Resource reconciliation actions</li>
+                <li>Configuration changes</li>
+                <li>User activities</li>
+              </ul>
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="btn-cancel" 
+                onClick={() => setShowCleanupModal(false)}
+                disabled={cleaningUp}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn-confirm-delete" 
+                onClick={confirmCleanup}
+                disabled={cleaningUp}
+              >
+                {cleaningUp ? 'Cleaning...' : 'Delete Old Logs'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
     <div className="settings-container">
       <div className="settings-header">
         <h2>⚙️ Settings</h2>
@@ -243,6 +300,7 @@ const Settings: React.FC = () => {
         <AzureSubscriptions />
       )}
     </div>
+    </>
   );
 };
 
