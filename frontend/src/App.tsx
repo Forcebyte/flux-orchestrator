@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import Dashboard from './components/Dashboard';
+import Audit from './components/Audit';
 import Clusters from './components/Clusters';
 import ClusterDetail from './components/ClusterDetail';
 import Settings from './components/Settings';
@@ -35,6 +36,12 @@ const Sidebar: React.FC = () => {
           className={`nav-item ${location.pathname.startsWith('/clusters') ? 'active' : ''}`}
         >
           Clusters
+        </Link>
+        <Link
+          to="/audit"
+          className={`nav-item ${location.pathname === '/audit' ? 'active' : ''}`}
+        >
+          Audit
         </Link>
         <Link
           to="/settings"
@@ -118,6 +125,7 @@ const AppContent: React.FC = () => {
           <Route path="/" element={<Dashboard />} />
           <Route path="/clusters" element={<Clusters />} />
           <Route path="/clusters/:id" element={<ClusterDetail />} />
+          <Route path="/audit" element={<Audit />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </div>

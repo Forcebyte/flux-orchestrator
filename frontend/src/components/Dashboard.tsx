@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { resourceApi, clusterApi } from '../api';
 import { FluxResource, Cluster } from '../types';
 import ActivityFeed from './ActivityFeed';
 import '../styles/Dashboard.css';
 
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [resources, setResources] = useState<FluxResource[]>([]);
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [loading, setLoading] = useState(true);
@@ -328,7 +330,12 @@ const Dashboard: React.FC = () => {
               .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
               .slice(0, 20)
               .map(resource => (
-                <div key={resource.id} className="resource-row">
+                <div
+                  key={resource.id}
+                  className="resource-row"
+                  onClick={() => navigate(`/clusters/${resource.cluster_id}`)}
+                  style={{ cursor: 'pointer' }}
+                >
                   <span className="resource-icon">{getKindIcon(resource.kind)}</span>
                   <div className="resource-details">
                     <div className="resource-name">{resource.name}</div>

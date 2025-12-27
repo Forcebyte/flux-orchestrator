@@ -993,7 +993,18 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("session_token")
-respondJSON(w, http.StatusOK, session.UserInfo)
+	if err != nil {
+		respondError(w, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+
+	session, exists := s.sessionStore.Get(cookie.Value)
+	if !exists {
+		respondError(w, http.StatusUnauthorized, "Invalid session")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, session.UserInfo)
 }
 
 // Auth middleware
