@@ -50,7 +50,7 @@ const Dashboard: React.FC = () => {
     ready: resources.filter(r => r.status === 'Ready').length,
     notReady: resources.filter(r => r.status === 'NotReady').length,
     unknown: resources.filter(r => r.status === 'Unknown').length,
-    suspended: resources.filter(r => r.suspend).length,
+    suspended: 0, // Suspend status not tracked in FluxResource type
   };
 
   const healthPercentage = stats.total > 0 
@@ -223,7 +223,7 @@ const Dashboard: React.FC = () => {
         <h3>Recent Resources</h3>
         <div className="recent-resources">
           {resources
-            .sort((a, b) => new Date(b.last_updated).getTime() - new Date(a.last_updated).getTime())
+            .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
             .slice(0, 10)
             .map(resource => (
               <div key={resource.id} className="resource-row">
@@ -237,7 +237,6 @@ const Dashboard: React.FC = () => {
                 <span className={`status-badge status-${resource.status.toLowerCase()}`}>
                   {resource.status}
                 </span>
-                {resource.suspend && <span className="suspend-badge">Suspended</span>}
               </div>
             ))}
         </div>
