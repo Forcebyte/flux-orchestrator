@@ -136,7 +136,7 @@ func main() {
 	// Create API server
 	apiServer := api.NewServer(db, k8sClient, encryptor)
 
-	// Start background sync worker
+	// Start background sync worker with dynamic interval
 	go syncWorker(db, k8sClient)
 
 	// Start HTTP server
@@ -151,17 +151,44 @@ func main() {
 
 // syncWorker periodically syncs resources from all clusters
 func syncWorker(db *database.DB, k8sClient *k8s.Client) {
-	ticker := time.NewTicker(5 * time.Minute)
+	// Start with default interval
+	interval := 5 * time.Minute
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		log.Println("Running periodic sync...")
+	// Channel for dynamic interval updates
+	updateInterval := make(chan time.Duration, 1)
 
-		var clusters []models.Cluster
-		if err := db.Where("status = ?", "healthy").Find(&clusters).Error; err != nil {
-			log.Printf("Sync worker: Failed to query clusters: %v", err)
-			continue
+	// Goroutine to check for interval changes
+	go func() {
+		for {
+			time.Sleep(30 * time.Second) // Check every 30 seconds
+			var setting models.Setting
+			if err := db.Where("key = ?", "auto_sync_interval_minutes").First(&setting).Error; err == nil {
+				if minutes, err := strconv.Atoi(setting.Value); err == nil && minutes > 0 {
+					newInterval := time.Duration(minutes) * time.Minute
+					if newInterval != interval {
+						log.Printf("Auto-sync interval changed to %d minutes", minutes)
+						updateInterval <- newInterval
+					}
+				}
+			}
 		}
+	}()
+
+	for {
+		select {
+		case newInterval := <-updateInterval:
+			interval = newInterval
+			ticker.Reset(interval)
+		case <-ticker.C:
+			log.Println("Running periodic sync...")
+
+			var clusters []models.Cluster
+			if err := db.Where("status = ?", "healthy").Find(&clusters).Error; err != nil {
+				log.Printf("Sync worker: Failed to query clusters: %v", err)
+				continue
+			}
 
 		for _, cluster := range clusters {
 			clusterID := cluster.ID
@@ -189,6 +216,7 @@ func syncWorker(db *database.DB, k8sClient *k8s.Client) {
 			}
 
 			log.Printf("Sync worker: Synced %d resources from cluster %s", len(resources), clusterID)
+		}
 		}
 	}
 }

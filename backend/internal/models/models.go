@@ -17,6 +17,13 @@ type Cluster struct {
 	UpdatedAt   time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
+// Setting represents application settings
+type Setting struct {
+	Key       string    `json:"key" gorm:"primaryKey;size:100"`
+	Value     string    `json:"value" gorm:"type:text;not null"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
 // FluxResource represents a generic Flux resource
 type FluxResource struct {
 	ID            string    `json:"id" gorm:"primaryKey;size:255"`

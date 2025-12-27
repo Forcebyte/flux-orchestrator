@@ -4,6 +4,7 @@ import { clusterApi, resourceApi, fluxApi } from '../api';
 import { Cluster, FluxResource, FluxStats, FluxResourceChild } from '../types';
 import { useToast } from '../hooks/useToast';
 import Toast from './Toast';
+import ResourceTree from './ResourceTree';
 import '../styles/ClusterDetail.css';
 
 const ClusterDetail: React.FC = () => {
@@ -316,6 +317,12 @@ const ClusterDetail: React.FC = () => {
             >
               All ({resources.length})
             </button>
+            <button
+              className={`tab ${activeTab === 'tree' ? 'active' : ''}`}
+              onClick={() => setActiveTab('tree')}
+            >
+              🌳 Tree View
+            </button>
             {Object.entries(resourcesByKind)
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([kind, count]) => (
@@ -329,7 +336,11 @@ const ClusterDetail: React.FC = () => {
               ))}
           </div>
 
-          {filteredResources.length === 0 ? (
+          {activeTab === 'tree' ? (
+            <div className="tab-content">
+              <ResourceTree clusterId={id!} />
+            </div>
+          ) : filteredResources.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon">📦</div>
               <h3>No Resources Found</h3>

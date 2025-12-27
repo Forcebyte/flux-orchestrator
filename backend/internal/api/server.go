@@ -55,6 +55,7 @@ func (s *Server) routes() {
 
 	// Flux resources
 	api.HandleFunc("/clusters/{id}/resources", s.listClusterResources).Methods("GET", "OPTIONS")
+	api.HandleFunc("/clusters/{id}/resources/tree", s.getResourceTree).Methods("GET", "OPTIONS")
 	api.HandleFunc("/clusters/{id}/flux/stats", s.getFluxStats).Methods("GET", "OPTIONS")
 	api.HandleFunc("/clusters/{id}/flux/{kind}/{namespace}/{name}", s.getFluxResource).Methods("GET", "OPTIONS")
 	api.HandleFunc("/clusters/{id}/flux/{kind}/{namespace}/{name}/reconcile", s.reconcileFluxResource).Methods("POST", "OPTIONS")
@@ -67,6 +68,10 @@ func (s *Server) routes() {
 
 	// Sync resources from cluster
 	api.HandleFunc("/clusters/{id}/sync", s.syncClusterResources).Methods("POST", "OPTIONS")
+
+	// Settings
+	api.HandleFunc("/settings", s.getSettings).Methods("GET", "OPTIONS")
+	api.HandleFunc("/settings/{key}", s.updateSetting).Methods("PUT", "OPTIONS")
 
 	// Health check
 	s.router.HandleFunc("/health", s.health).Methods("GET")
@@ -535,4 +540,77 @@ func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 // respondError writes an error response
 func respondError(w http.ResponseWriter, status int, message string) {
 	respondJSON(w, status, map[string]string{"error": message})
+}
+
+// getSettings returns all settings
+func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
+	var settings []models.Setting
+	if err := s.db.Find(&settings).Error; err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to fetch settings: %v", err))
+		return
+	}
+
+	respondJSON(w, http.StatusOK, settings)
+}
+
+// updateSetting updates a setting value
+func (s *Server) updateSetting(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	key := vars["key"]
+
+	var req struct {
+		Value string `json:"value"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.Value == "" {
+		respondError(w, http.StatusBadRequest, "Value is required")
+		return
+	}
+
+	// Update or create setting
+	var setting models.Setting
+	result := s.db.Where("key = ?", key).First(&setting)
+	if result.Error != nil {
+		// Create new setting
+		setting = models.Setting{
+			Key:   key,
+			Value: req.Value,
+		}
+		if err := s.db.Create(&setting).Error; err != nil {
+			respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to create setting: %v", err))
+			return
+		}
+	} else {
+		// Update existing setting
+		if err := s.db.Model(&setting).Update("value", req.Value).Error; err != nil {
+			respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to update setting: %v", err))
+			return
+		}
+		setting.Value = req.Value
+	}
+
+	respondJSON(w, http.StatusOK, setting)
+}
+
+// getResourceTree returns hierarchical tree of all resources in a cluster
+func (s *Server) getResourceTree(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	clusterID := vars["id"]
+
+	ctx := r.Context()
+	tree, err := s.k8sClient.GetResourceTree(ctx, clusterID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get resource tree: %v", err))
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"tree":  tree,
+		"count": len(tree),
+	})
 }

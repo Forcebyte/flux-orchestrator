@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react
 import Dashboard from './components/Dashboard';
 import Clusters from './components/Clusters';
 import ClusterDetail from './components/ClusterDetail';
+import Settings from './components/Settings';
 import './App.css';
 
 const Sidebar: React.FC = () => {
@@ -27,6 +28,12 @@ const Sidebar: React.FC = () => {
         >
           Clusters
         </Link>
+        <Link
+          to="/settings"
+          className={`nav-item ${location.pathname === '/settings' ? 'active' : ''}`}
+        >
+          Settings
+        </Link>
       </div>
     </div>
   );
@@ -42,6 +49,7 @@ const App: React.FC = () => {
             <Route path="/" element={<Dashboard />} />
             <Route path="/clusters" element={<Clusters />} />
             <Route path="/clusters/:id" element={<ClusterDetail />} />
+            <Route path="/settings" element={<Settings />} />
           </Routes>
         </div>
       </div>

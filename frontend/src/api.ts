@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Cluster, FluxResource, ReconcileRequest, FluxStats, FluxResourceChild } from './types';
+import { Cluster, FluxResource, ReconcileRequest, FluxStats, FluxResourceChild, Setting, ResourceNode } from './types';
 
 const API_BASE = '/api/v1';
 
@@ -17,6 +17,7 @@ export const clusterApi = {
   delete: (id: string) => api.delete(`/clusters/${id}`),
   checkHealth: (id: string) => api.get(`/clusters/${id}/health`),
   syncResources: (id: string) => api.post(`/clusters/${id}/sync`),
+  getResourceTree: (id: string) => api.get<{ tree: ResourceNode[]; count: number }>(`/clusters/${id}/resources/tree`),
 };
 
 export const resourceApi = {
@@ -38,6 +39,11 @@ export const fluxApi = {
     api.post(`/clusters/${clusterId}/flux/${kind}/${namespace}/${name}/resume`),
   getChildren: (clusterId: string, kind: string, namespace: string, name: string) =>
     api.get<{ resources: FluxResourceChild[]; count: number }>(`/clusters/${clusterId}/flux/${kind}/${namespace}/${name}/resources`),
+};
+
+export const settingsApi = {
+  list: () => api.get<Setting[]>('/settings'),
+  update: (key: string, value: string) => api.put<Setting>(`/settings/${key}`, { value }),
 };
 
 export default api;

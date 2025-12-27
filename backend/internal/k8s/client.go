@@ -472,3 +472,193 @@ func (c *Client) GetFluxStats(clusterID string) (map[string]interface{}, error) 
 func GetInClusterConfig() (*rest.Config, error) {
 	return rest.InClusterConfig()
 }
+
+// ResourceNode represents a node in the resource tree
+type ResourceNode struct {
+	ID          string         `json:"id"`
+	Kind        string         `json:"kind"`
+	Name        string         `json:"name"`
+	Namespace   string         `json:"namespace"`
+	Status      string         `json:"status"`
+	Health      string         `json:"health"`
+	CreatedAt   string         `json:"created_at"`
+	Children    []ResourceNode `json:"children,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// GetResourceTree builds a hierarchical tree of all Kubernetes resources in a cluster
+func (c *Client) GetResourceTree(ctx context.Context, clusterID string) ([]ResourceNode, error) {
+	client, err := c.GetClient(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get all resource types to query
+	resourceTypes := []struct {
+		gvr       schema.GroupVersionResource
+		kind      string
+		namespaced bool
+	}{
+		// Flux resources
+		{schema.GroupVersionResource{Group: "kustomize.toolkit.fluxcd.io", Version: "v1", Resource: "kustomizations"}, "Kustomization", true},
+		{schema.GroupVersionResource{Group: "helm.toolkit.fluxcd.io", Version: "v2", Resource: "helmreleases"}, "HelmRelease", true},
+		{schema.GroupVersionResource{Group: "source.toolkit.fluxcd.io", Version: "v1", Resource: "gitrepositories"}, "GitRepository", true},
+		{schema.GroupVersionResource{Group: "source.toolkit.fluxcd.io", Version: "v1", Resource: "helmrepositories"}, "HelmRepository", true},
+		{schema.GroupVersionResource{Group: "source.toolkit.fluxcd.io", Version: "v1beta2", Resource: "buckets"}, "Bucket", true},
+		{schema.GroupVersionResource{Group: "source.toolkit.fluxcd.io", Version: "v1beta2", Resource: "ocirepositories"}, "OCIRepository", true},
+		
+		// Core Kubernetes resources
+		{schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}, "Namespace", false},
+		{schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}, "Deployment", true},
+		{schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "replicasets"}, "ReplicaSet", true},
+		{schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "statefulsets"}, "StatefulSet", true},
+		{schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "daemonsets"}, "DaemonSet", true},
+		{schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}, "Pod", true},
+		{schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}, "Service", true},
+		{schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}, "ConfigMap", true},
+		{schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, "Secret", true},
+		{schema.GroupVersionResource{Group: "networking.k8s.io", Version: "v1", Resource: "ingresses"}, "Ingress", true},
+		{schema.GroupVersionResource{Group: "batch", Version: "v1", Resource: "jobs"}, "Job", true},
+		{schema.GroupVersionResource{Group: "batch", Version: "v1", Resource: "cronjobs"}, "CronJob", true},
+	}
+
+	allResources := make(map[string]*ResourceNode)
+	var rootResources []string
+
+	// Fetch all resources
+	for _, rt := range resourceTypes {
+		var list *unstructured.UnstructuredList
+		var err error
+
+		if rt.namespaced {
+			list, err = client.Resource(rt.gvr).List(ctx, metav1.ListOptions{})
+		} else {
+			list, err = client.Resource(rt.gvr).List(ctx, metav1.ListOptions{})
+		}
+
+		if err != nil {
+			// Skip resources that don't exist in this cluster
+			continue
+		}
+
+		for _, obj := range list.Items {
+			node := c.parseResourceNode(&obj, rt.kind)
+			allResources[node.ID] = &node
+
+			// Track resources without owners as roots
+			owners := obj.GetOwnerReferences()
+			if len(owners) == 0 {
+				rootResources = append(rootResources, node.ID)
+			}
+		}
+	}
+
+	// Build parent-child relationships
+	for _, res := range allResources {
+		// Find this resource's object to get owner references
+		for _, rt := range resourceTypes {
+			if rt.kind != res.Kind {
+				continue
+			}
+
+			var obj *unstructured.Unstructured
+			var err error
+
+			if rt.namespaced {
+				obj, err = client.Resource(rt.gvr).Namespace(res.Namespace).Get(ctx, res.Name, metav1.GetOptions{})
+			} else {
+				obj, err = client.Resource(rt.gvr).Get(ctx, res.Name, metav1.GetOptions{})
+			}
+
+			if err != nil {
+				continue
+			}
+
+			owners := obj.GetOwnerReferences()
+			for _, owner := range owners {
+				parentID := fmt.Sprintf("%s/%s/%s", res.Namespace, string(owner.Kind), owner.Name)
+				if parent, exists := allResources[parentID]; exists {
+					parent.Children = append(parent.Children, *res)
+				}
+			}
+			break
+		}
+	}
+
+	// Build tree from root resources
+	var tree []ResourceNode
+	for _, rootID := range rootResources {
+		if root, exists := allResources[rootID]; exists {
+			tree = append(tree, *root)
+		}
+	}
+
+	return tree, nil
+}
+
+// parseResourceNode converts an unstructured object to a ResourceNode
+func (c *Client) parseResourceNode(obj *unstructured.Unstructured, kind string) ResourceNode {
+	status := "Unknown"
+	health := "Unknown"
+
+	// Extract status conditions
+	conditions, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
+	if err == nil && found && len(conditions) > 0 {
+		for _, cond := range conditions {
+			condMap, ok := cond.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			condType, _, _ := unstructured.NestedString(condMap, "type")
+			condStatus, _, _ := unstructured.NestedString(condMap, "status")
+
+			if condType == "Ready" {
+				status = condStatus
+				if condStatus == "True" {
+					health = "Healthy"
+				} else {
+					health = "Degraded"
+				}
+				break
+			}
+		}
+	}
+
+	// Extract phase for Pods
+	if kind == "Pod" {
+		phase, found, _ := unstructured.NestedString(obj.Object, "status", "phase")
+		if found {
+			status = phase
+			switch phase {
+			case "Running", "Succeeded":
+				health = "Healthy"
+			case "Pending":
+				health = "Progressing"
+			case "Failed", "Unknown":
+				health = "Degraded"
+			}
+		}
+	}
+
+	// Build metadata
+	metadata := make(map[string]interface{})
+	metadata["apiVersion"] = obj.GetAPIVersion()
+	if labels := obj.GetLabels(); len(labels) > 0 {
+		metadata["labels"] = labels
+	}
+	if annotations := obj.GetAnnotations(); len(annotations) > 0 {
+		metadata["annotations"] = annotations
+	}
+
+	return ResourceNode{
+		ID:        fmt.Sprintf("%s/%s/%s", obj.GetNamespace(), kind, obj.GetName()),
+		Kind:      kind,
+		Name:      obj.GetName(),
+		Namespace: obj.GetNamespace(),
+		Status:    status,
+		Health:    health,
+		CreatedAt: obj.GetCreationTimestamp().Format(time.RFC3339),
+		Children:  []ResourceNode{},
+		Metadata:  metadata,
+	}
+}

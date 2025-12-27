@@ -47,3 +47,20 @@ export interface ReconcileRequest {
   namespace: string;
 }
 
+export interface Setting {
+  key: string;
+  value: string;
+  updated_at: string;
+}
+
+export interface ResourceNode {
+  id: string;
+  kind: string;
+  name: string;
+  namespace: string;
+  status: string;
+  health: 'Healthy' | 'Degraded' | 'Progressing' | 'Unknown';
+  created_at: string;
+  children: ResourceNode[];
+  metadata?: Record<string, any>;
+}
