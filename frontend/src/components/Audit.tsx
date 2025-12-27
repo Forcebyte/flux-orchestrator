@@ -4,14 +4,18 @@ import '../styles/Dashboard.css';
 
 const Audit: React.FC = () => {
   return (
-    <div className="dashboard-container">
+    <div className="dashboard">
       <div className="dashboard-header">
-        <h2>📝 Audit Activity</h2>
-        <p className="header-subtitle">Recent actions across clusters and resources</p>
+        <div>
+          <h2>📝 Audit Activity</h2>
+          <p>Recent actions across clusters and resources</p>
+        </div>
       </div>
 
-      <div className="dashboard-card">
-        <ActivityFeed limit={100} />
+      <div className="dashboard-content">
+        <div className="dashboard-card">
+          <ActivityFeed limit={100} />
+        </div>
       </div>
     </div>
   );
