@@ -10,7 +10,11 @@ A comprehensive multi-cluster GitOps management platform for Flux CD, providing 
 - 💾 **Flexible Database Backend**: Support for PostgreSQL and MySQL
 - 🔐 **Secure**: RBAC-enabled with Fernet-encrypted kubeconfig storage
 - 🔒 **Encryption at Rest**: All sensitive kubeconfig data is encrypted using Fernet (AES-128-CBC with HMAC-SHA256)
-- 🚀 **Easy Deployment**: Deploy to a central cluster with Kubernetes manifests
+- � **OAuth Authentication**: Optional OAuth support with GitHub and Microsoft Entra (Azure AD)
+- 🌳 **Resource Tree View**: Visualize Kustomization resources and their managed workloads
+- 📝 **Resource Management**: View logs, restart workloads, scale deployments, and manage child resources
+- ⚡ **Auto-Sync**: Configurable automatic resource synchronization
+- �🚀 **Easy Deployment**: Deploy to a central cluster with Kubernetes manifests
 
 ## Architecture
 
@@ -270,6 +274,40 @@ The dashboard provides an overview of all resources across all clusters:
 | `SCRAPE_IN_CLUSTER` | Enable in-cluster scraping | `false` |
 | `IN_CLUSTER_NAME` | Name for in-cluster configuration | `in-cluster` |
 | `IN_CLUSTER_DESCRIPTION` | Description for in-cluster | `Local cluster...` |
+| **OAuth Configuration** | | |
+| `OAUTH_ENABLED` | Enable OAuth authentication | `false` |
+| `OAUTH_PROVIDER` | OAuth provider (`github` or `entra`) | - |
+| `OAUTH_CLIENT_ID` | OAuth app client ID | - |
+| `OAUTH_CLIENT_SECRET` | OAuth app client secret | - |
+| `OAUTH_REDIRECT_URL` | OAuth callback URL | `http://localhost:8080/api/v1/auth/callback` |
+| `OAUTH_SCOPES` | Comma-separated OAuth scopes | - |
+| `OAUTH_ALLOWED_USERS` | Comma-separated allowed user emails (optional) | - |
+
+### OAuth Authentication (Optional)
+
+Flux Orchestrator supports optional OAuth authentication with GitHub and Microsoft Entra (Azure AD). When enabled, users must authenticate before accessing the application.
+
+**Quick Setup:**
+
+1. **Create OAuth App** (GitHub or Azure AD)
+2. **Configure Environment Variables:**
+   ```bash
+   OAUTH_ENABLED=true
+   OAUTH_PROVIDER=github  # or "entra"
+   OAUTH_CLIENT_ID=your_client_id
+   OAUTH_CLIENT_SECRET=your_client_secret
+   OAUTH_REDIRECT_URL=http://localhost:8080/api/v1/auth/callback
+   ```
+3. **Restart Application**
+
+For detailed setup instructions, see **[docs/OAUTH.md](docs/OAUTH.md)**.
+
+**Features:**
+- ✅ GitHub and Microsoft Entra support
+- ✅ Optional user allow-list
+- ✅ 24-hour session management
+- ✅ CSRF protection
+- ✅ Modern login UI
 
 ## Security
 

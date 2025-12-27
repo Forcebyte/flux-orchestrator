@@ -628,7 +628,8 @@ func (c *Client) GetResourceTree(ctx context.Context, clusterID string) ([]Resou
 	}
 
 	allResources := make(map[string]*ResourceNode)
-	var rootResources []string
+	var fluxResources []string
+	var namespaces []string
 
 	// Fetch all resources
 	for _, rt := range resourceTypes {
@@ -650,16 +651,29 @@ func (c *Client) GetResourceTree(ctx context.Context, clusterID string) ([]Resou
 			node := c.parseResourceNode(&obj, rt.kind)
 			allResources[node.ID] = &node
 
-			// Track resources without owners as roots
-			owners := obj.GetOwnerReferences()
-			if len(owners) == 0 {
-				rootResources = append(rootResources, node.ID)
+			// Track Flux resources separately (these are top-level)
+			if rt.kind == "Kustomization" || rt.kind == "HelmRelease" || 
+			   rt.kind == "GitRepository" || rt.kind == "HelmRepository" ||
+			   rt.kind == "Bucket" || rt.kind == "OCIRepository" {
+				fluxResources = append(fluxResources, node.ID)
+			}
+			
+			// Track namespaces separately
+			if rt.kind == "Namespace" {
+				namespaces = append(namespaces, node.ID)
 			}
 		}
 	}
 
-	// Build parent-child relationships
+	// Build parent-child relationships for workload resources
 	for _, res := range allResources {
+		// Skip Flux resources and Namespaces from this loop
+		if res.Kind == "Kustomization" || res.Kind == "HelmRelease" || 
+		   res.Kind == "GitRepository" || res.Kind == "HelmRepository" ||
+		   res.Kind == "Bucket" || res.Kind == "OCIRepository" || res.Kind == "Namespace" {
+			continue
+		}
+
 		// Find this resource's object to get owner references
 		for _, rt := range resourceTypes {
 			if rt.kind != res.Kind {
@@ -726,13 +740,6 @@ func (c *Client) GetResourceTree(ctx context.Context, clusterID string) ([]Resou
 							
 							// If we found this resource, add it as a child
 							if managedNode, exists := allResources[managedID]; exists {
-								// Remove from root resources if it's there
-								for i, rootID := range rootResources {
-									if rootID == managedID {
-										rootResources = append(rootResources[:i], rootResources[i+1:]...)
-										break
-									}
-								}
 								res.Children = append(res.Children, *managedNode)
 							} else {
 								// Resource not in our list, create a simple node for it
@@ -759,11 +766,11 @@ func (c *Client) GetResourceTree(ctx context.Context, clusterID string) ([]Resou
 		}
 	}
 
-	// Build tree from root resources
+	// Build tree from Flux resources (these are our root nodes)
 	var tree []ResourceNode
-	for _, rootID := range rootResources {
-		if root, exists := allResources[rootID]; exists {
-			tree = append(tree, *root)
+	for _, fluxID := range fluxResources {
+		if fluxNode, exists := allResources[fluxID]; exists {
+			tree = append(tree, *fluxNode)
 		}
 	}
 

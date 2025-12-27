@@ -44,6 +44,10 @@ export const resourceApi = {
 };
 
 export const fluxApi = {
+  // Expose the axios instance for direct usage
+  axios: api,
+  
+  // Existing methods
   getStats: (clusterId: string) => api.get<FluxStats>(`/clusters/${clusterId}/flux/stats`),
   getResource: (clusterId: string, kind: string, namespace: string, name: string) =>
     api.get<FluxResource>(`/clusters/${clusterId}/flux/${kind}/${namespace}/${name}`),

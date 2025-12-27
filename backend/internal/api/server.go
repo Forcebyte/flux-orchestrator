@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Forcebyte/flux-orchestrator/backend/internal/auth"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/database"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/encryption"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/k8s"
@@ -20,21 +21,33 @@ import (
 
 // Server represents the API server
 type Server struct {
-	db        *database.DB
-	k8sClient *k8s.Client
-	router    *mux.Router
-	encryptor *encryption.Encryptor
+	db           *database.DB
+	k8sClient    *k8s.Client
+	router       *mux.Router
+	encryptor    *encryption.Encryptor
+	oauthProvider *auth.OAuthProvider
+	sessionStore *auth.SessionStore
+	authEnabled  bool
 }
 
 // NewServer creates a new API server
-func NewServer(db *database.DB, k8sClient *k8s.Client, encryptor *encryption.Encryptor) *Server {
+func NewServer(db *database.DB, k8sClient *k8s.Client, encryptor *encryption.Encryptor, oauthProvider *auth.OAuthProvider) *Server {
 	s := &Server{
-		db:        db,
-		k8sClient: k8sClient,
-		router:    mux.NewRouter(),
-		encryptor: encryptor,
+		db:            db,
+		k8sClient:     k8sClient,
+		router:        mux.NewRouter(),
+		encryptor:     encryptor,
+		oauthProvider: oauthProvider,
+		sessionStore:  auth.NewSessionStore(),
+		authEnabled:   oauthProvider != nil,
 	}
 	s.routes()
+	
+	// Start session cleanup goroutine
+	if s.authEnabled {
+		go s.cleanupSessions()
+	}
+	
 	return s
 }
 
@@ -43,8 +56,22 @@ func (s *Server) routes() {
 	// Enable CORS
 	s.router.Use(corsMiddleware)
 
+	// Auth routes (public)
+	if s.authEnabled {
+		s.router.HandleFunc("/api/v1/auth/login", s.handleAuthLogin).Methods("GET", "OPTIONS")
+		s.router.HandleFunc("/api/v1/auth/callback", s.handleAuthCallback).Methods("GET", "OPTIONS")
+		s.router.HandleFunc("/api/v1/auth/logout", s.handleAuthLogout).Methods("POST", "OPTIONS")
+		s.router.HandleFunc("/api/v1/auth/me", s.handleAuthMe).Methods("GET", "OPTIONS")
+		s.router.HandleFunc("/api/v1/auth/status", s.handleAuthStatus).Methods("GET", "OPTIONS")
+	}
+
 	// API routes
 	api := s.router.PathPrefix("/api/v1").Subrouter()
+	
+	// Apply auth middleware if enabled
+	if s.authEnabled {
+		api.Use(s.authMiddleware)
+	}
 
 	// Cluster management
 	api.HandleFunc("/clusters", s.listClusters).Methods("GET", "OPTIONS")
@@ -763,4 +790,170 @@ return
 }
 
 respondJSON(w, http.StatusOK, map[string]string{"message": "Pod deleted successfully"})
+}
+
+// Auth handlers
+
+func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
+respondJSON(w, http.StatusOK, map[string]interface{}{
+"enabled": s.authEnabled,
+})
+}
+
+func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
+state, err := auth.GenerateState()
+if err != nil {
+respondError(w, http.StatusInternalServerError, "Failed to generate state")
+return
+}
+
+// Store state in cookie for validation
+http.SetCookie(w, &http.Cookie{
+Name:     "oauth_state",
+Value:    state,
+Path:     "/",
+MaxAge:   600, // 10 minutes
+HttpOnly: true,
+Secure:   false, // Set to true in production with HTTPS
+SameSite: http.SameSiteLaxMode,
+})
+
+authURL := s.oauthProvider.GetAuthURL(state)
+http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
+}
+
+func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
+// Verify state
+stateCookie, err := r.Cookie("oauth_state")
+if err != nil {
+http.Redirect(w, r, "/?error=invalid_state", http.StatusTemporaryRedirect)
+return
+}
+
+state := r.URL.Query().Get("state")
+if state != stateCookie.Value {
+http.Redirect(w, r, "/?error=state_mismatch", http.StatusTemporaryRedirect)
+return
+}
+
+// Exchange code for token
+code := r.URL.Query().Get("code")
+token, err := s.oauthProvider.Exchange(r.Context(), code)
+if err != nil {
+log.Printf("OAuth token exchange failed: %v", err)
+http.Redirect(w, r, "/?error=token_exchange_failed", http.StatusTemporaryRedirect)
+return
+}
+
+// Get user info
+userInfo, err := s.oauthProvider.GetUserInfo(r.Context(), token)
+if err != nil {
+log.Printf("Failed to get user info: %v", err)
+http.Redirect(w, r, "/?error=user_info_failed", http.StatusTemporaryRedirect)
+return
+}
+
+// Check if user is allowed
+if !s.oauthProvider.IsUserAllowed(userInfo) {
+log.Printf("User not allowed: %s", userInfo.Email)
+http.Redirect(w, r, "/?error=unauthorized", http.StatusTemporaryRedirect)
+return
+}
+
+// Create session
+sessionToken, err := s.sessionStore.Create(userInfo)
+if err != nil {
+log.Printf("Failed to create session: %v", err)
+http.Redirect(w, r, "/?error=session_failed", http.StatusTemporaryRedirect)
+return
+}
+
+// Set session cookie
+http.SetCookie(w, &http.Cookie{
+Name:     "session_token",
+Value:    sessionToken,
+Path:     "/",
+MaxAge:   86400, // 24 hours
+HttpOnly: true,
+Secure:   false, // Set to true in production with HTTPS
+SameSite: http.SameSiteLaxMode,
+})
+
+// Clear state cookie
+http.SetCookie(w, &http.Cookie{
+Name:   "oauth_state",
+Value:  "",
+Path:   "/",
+MaxAge: -1,
+})
+
+http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+}
+
+func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
+cookie, err := r.Cookie("session_token")
+if err == nil {
+s.sessionStore.Delete(cookie.Value)
+}
+
+http.SetCookie(w, &http.Cookie{
+Name:   "session_token",
+Value:  "",
+Path:   "/",
+MaxAge: -1,
+})
+
+respondJSON(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
+}
+
+func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
+cookie, err := r.Cookie("session_token")
+if err != nil {
+respondError(w, http.StatusUnauthorized, "Not authenticated")
+return
+}
+
+session, exists := s.sessionStore.Get(cookie.Value)
+if !exists {
+respondError(w, http.StatusUnauthorized, "Invalid session")
+return
+}
+
+respondJSON(w, http.StatusOK, session.UserInfo)
+}
+
+// Auth middleware
+func (s *Server) authMiddleware(next http.Handler) http.Handler {
+return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+if r.Method == "OPTIONS" {
+next.ServeHTTP(w, r)
+return
+}
+
+cookie, err := r.Cookie("session_token")
+if err != nil {
+respondError(w, http.StatusUnauthorized, "Authentication required")
+return
+}
+
+session, exists := s.sessionStore.Get(cookie.Value)
+if !exists {
+respondError(w, http.StatusUnauthorized, "Invalid or expired session")
+return
+}
+
+// Add user info to context
+ctx := context.WithValue(r.Context(), "user", session.UserInfo)
+next.ServeHTTP(w, r.WithContext(ctx))
+})
+}
+
+// cleanupSessions periodically removes expired sessions
+func (s *Server) cleanupSessions() {
+ticker := time.NewTicker(1 * time.Hour)
+defer ticker.Stop()
+
+for range ticker.C {
+s.sessionStore.CleanExpired()
+}
 }

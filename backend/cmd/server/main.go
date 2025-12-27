@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/api"
+	"github.com/Forcebyte/flux-orchestrator/backend/internal/auth"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/database"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/encryption"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/k8s"
@@ -133,8 +135,35 @@ func main() {
 		}
 	}
 
+	// Configure OAuth if enabled
+	var oauthProvider *auth.OAuthProvider
+	if getEnv("OAUTH_ENABLED", "false") == "true" {
+		oauthConfig := auth.Config{
+			Enabled:      true,
+			Provider:     getEnv("OAUTH_PROVIDER", "github"), // "github" or "entra"
+			ClientID:     getEnv("OAUTH_CLIENT_ID", ""),
+			ClientSecret: getEnv("OAUTH_CLIENT_SECRET", ""),
+			RedirectURL:  getEnv("OAUTH_REDIRECT_URL", "http://localhost:8080/api/v1/auth/callback"),
+			Scopes:       strings.Split(getEnv("OAUTH_SCOPES", ""), ","),
+		}
+
+		// Parse allowed users if specified
+		if allowedUsersStr := getEnv("OAUTH_ALLOWED_USERS", ""); allowedUsersStr != "" {
+			oauthConfig.AllowedUsers = strings.Split(allowedUsersStr, ",")
+		}
+
+		var err error
+		oauthProvider, err = auth.NewOAuthProvider(oauthConfig)
+		if err != nil {
+			log.Fatalf("Failed to initialize OAuth provider: %v", err)
+		}
+		log.Printf("OAuth enabled with provider: %s", oauthConfig.Provider)
+	} else {
+		log.Println("OAuth disabled - running in open mode")
+	}
+
 	// Create API server
-	apiServer := api.NewServer(db, k8sClient, encryptor)
+	apiServer := api.NewServer(db, k8sClient, encryptor, oauthProvider)
 
 	// Start background sync worker with dynamic interval
 	go syncWorker(db, k8sClient)
