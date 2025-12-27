@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Cluster, FluxResource, ReconcileRequest, FluxStats, FluxResourceChild, Setting, ResourceNode, AzureSubscription, AKSCluster, AzureCredentials, Activity } from './types';
+import { Cluster, FluxResource, ReconcileRequest, FluxStats, FluxResourceChild, Setting, ResourceNode, AzureSubscription, AKSCluster, AzureCredentials, Activity, OAuthProvider } from './types';
 
 const API_BASE = '/api/v1';
 
@@ -102,6 +102,45 @@ export const activityApi = {
   
   // Get specific activity
   get: (id: number) => api.get<Activity>(`/activities/${id}`),
+};
+
+export const oauthApi = {
+  // List all OAuth providers
+  listProviders: () => api.get<OAuthProvider[]>('/oauth/providers'),
+  
+  // Get a specific provider
+  getProvider: (id: string) => api.get<OAuthProvider>(`/oauth/providers/${id}`),
+  
+  // Create a new provider
+  createProvider: (data: {
+    name: string;
+    provider: 'github' | 'entra';
+    client_id: string;
+    client_secret: string;
+    tenant_id?: string;
+    redirect_url: string;
+    scopes?: string;
+    allowed_users?: string;
+    enabled: boolean;
+  }) => api.post<OAuthProvider>('/oauth/providers', data),
+  
+  // Update a provider
+  updateProvider: (id: string, data: {
+    name?: string;
+    client_id?: string;
+    client_secret?: string;
+    tenant_id?: string;
+    redirect_url?: string;
+    scopes?: string;
+    allowed_users?: string;
+    enabled?: boolean;
+  }) => api.put(`/oauth/providers/${id}`, data),
+  
+  // Delete a provider
+  deleteProvider: (id: string) => api.delete(`/oauth/providers/${id}`),
+  
+  // Test configuration
+  testProvider: (id: string) => api.post<{ status: string; message: string }>(`/oauth/providers/${id}/test`),
 };
 
 export const exportApi = {

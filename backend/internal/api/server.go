@@ -139,6 +139,14 @@ func (s *Server) routes() {
 	api.HandleFunc("/azure/subscriptions/{id}/clusters", s.discoverAKSClusters).Methods("GET", "OPTIONS")
 	api.HandleFunc("/azure/subscriptions/{id}/sync", s.syncAKSClusters).Methods("POST", "OPTIONS")
 
+	// OAuth provider management
+	api.HandleFunc("/oauth/providers", s.listOAuthProviders).Methods("GET", "OPTIONS")
+	api.HandleFunc("/oauth/providers", s.createOAuthProvider).Methods("POST", "OPTIONS")
+	api.HandleFunc("/oauth/providers/{id}", s.getOAuthProvider).Methods("GET", "OPTIONS")
+	api.HandleFunc("/oauth/providers/{id}", s.updateOAuthProvider).Methods("PUT", "OPTIONS")
+	api.HandleFunc("/oauth/providers/{id}", s.deleteOAuthProvider).Methods("DELETE", "OPTIONS")
+	api.HandleFunc("/oauth/providers/{id}/test", s.testOAuthProvider).Methods("POST", "OPTIONS")
+
 	// Health check
 	s.router.HandleFunc("/health", s.health).Methods("GET")
 
@@ -1572,5 +1580,233 @@ func (s *Server) cleanupAuditLogsNow(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Audit log cleanup completed",
 		"remaining_activities": count,
+	})
+}
+
+// OAuth Provider Management
+
+func (s *Server) listOAuthProviders(w http.ResponseWriter, r *http.Request) {
+	var providers []models.OAuthProvider
+	if err := s.db.Find(&providers).Error; err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to list OAuth providers")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, providers)
+}
+
+func (s *Server) createOAuthProvider(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name         string `json:"name"`
+		Provider     string `json:"provider"` // github, entra
+		ClientID     string `json:"client_id"`
+		ClientSecret string `json:"client_secret"`
+		TenantID     string `json:"tenant_id,omitempty"`     // For Entra ID
+		RedirectURL  string `json:"redirect_url"`
+		Scopes       string `json:"scopes,omitempty"`        // Comma-separated
+		AllowedUsers string `json:"allowed_users,omitempty"` // Comma-separated
+		Enabled      bool   `json:"enabled"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Validate required fields
+	if req.Name == "" || req.Provider == "" || req.ClientID == "" || req.ClientSecret == "" || req.RedirectURL == "" {
+		respondError(w, http.StatusBadRequest, "Missing required fields")
+		return
+	}
+
+	// Validate provider type
+	if req.Provider != "github" && req.Provider != "entra" {
+		respondError(w, http.StatusBadRequest, "Provider must be 'github' or 'entra'")
+		return
+	}
+
+	// For Entra ID, tenant ID is required
+	if req.Provider == "entra" && req.TenantID == "" {
+		respondError(w, http.StatusBadRequest, "Tenant ID is required for Entra ID provider")
+		return
+	}
+
+	// Encrypt client secret
+	encryptedSecret, err := s.encryptor.Encrypt(req.ClientSecret)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to encrypt client secret")
+		return
+	}
+
+	// Generate ID
+	providerID := uuid.New().String()
+
+	// Create database record
+	provider := models.OAuthProvider{
+		ID:           providerID,
+		Name:         req.Name,
+		Provider:     req.Provider,
+		ClientID:     req.ClientID,
+		ClientSecret: encryptedSecret,
+		TenantID:     req.TenantID,
+		RedirectURL:  req.RedirectURL,
+		Scopes:       req.Scopes,
+		AllowedUsers: req.AllowedUsers,
+		Enabled:      req.Enabled,
+		Status:       "unknown",
+	}
+
+	if err := s.db.Create(&provider).Error; err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to save OAuth provider")
+		return
+	}
+
+	// Clear client secret from response
+	provider.ClientSecret = ""
+	respondJSON(w, http.StatusCreated, provider)
+}
+
+func (s *Server) getOAuthProvider(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	var provider models.OAuthProvider
+	if err := s.db.First(&provider, "id = ?", id).Error; err != nil {
+		respondError(w, http.StatusNotFound, "OAuth provider not found")
+		return
+	}
+
+	// Clear client secret from response
+	provider.ClientSecret = ""
+	respondJSON(w, http.StatusOK, provider)
+}
+
+func (s *Server) updateOAuthProvider(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	var req struct {
+		Name         *string `json:"name"`
+		ClientID     *string `json:"client_id"`
+		ClientSecret *string `json:"client_secret"`
+		TenantID     *string `json:"tenant_id"`
+		RedirectURL  *string `json:"redirect_url"`
+		Scopes       *string `json:"scopes"`
+		AllowedUsers *string `json:"allowed_users"`
+		Enabled      *bool   `json:"enabled"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Build updates map
+	updates := make(map[string]interface{})
+	
+	if req.Name != nil {
+		updates["name"] = *req.Name
+	}
+	if req.ClientID != nil {
+		updates["client_id"] = *req.ClientID
+	}
+	if req.ClientSecret != nil && *req.ClientSecret != "" {
+		// Encrypt new client secret
+		encryptedSecret, err := s.encryptor.Encrypt(*req.ClientSecret)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to encrypt client secret")
+			return
+		}
+		updates["client_secret"] = encryptedSecret
+	}
+	if req.TenantID != nil {
+		updates["tenant_id"] = *req.TenantID
+	}
+	if req.RedirectURL != nil {
+		updates["redirect_url"] = *req.RedirectURL
+	}
+	if req.Scopes != nil {
+		updates["scopes"] = *req.Scopes
+	}
+	if req.AllowedUsers != nil {
+		updates["allowed_users"] = *req.AllowedUsers
+	}
+	if req.Enabled != nil {
+		updates["enabled"] = *req.Enabled
+	}
+
+	if err := s.db.Model(&models.OAuthProvider{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to update OAuth provider")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": "OAuth provider updated"})
+}
+
+func (s *Server) deleteOAuthProvider(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	// Delete from database
+	if err := s.db.Delete(&models.OAuthProvider{}, "id = ?", id).Error; err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to delete OAuth provider")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": "OAuth provider deleted successfully"})
+}
+
+func (s *Server) testOAuthProvider(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	// Get provider from database
+	var provider models.OAuthProvider
+	if err := s.db.First(&provider, "id = ?", id).Error; err != nil {
+		respondError(w, http.StatusNotFound, "OAuth provider not found")
+		return
+	}
+
+	// Decrypt client secret
+	clientSecret, err := s.encryptor.Decrypt(provider.ClientSecret)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to decrypt client secret")
+		return
+	}
+
+	// Parse scopes
+	var scopes []string
+	if provider.Scopes != "" {
+		scopes = []string{}
+		for _, scope := range []string{provider.Scopes} {
+			scopes = append(scopes, scope)
+		}
+	}
+
+	// Create auth config
+	authConfig := auth.Config{
+		Enabled:      true,
+		Provider:     provider.Provider,
+		ClientID:     provider.ClientID,
+		ClientSecret: clientSecret,
+		RedirectURL:  provider.RedirectURL,
+		Scopes:       scopes,
+	}
+
+	// Try to create OAuth provider (this validates the configuration)
+	_, err = auth.NewOAuthProvider(authConfig)
+	if err != nil {
+		// Update status
+		s.db.Model(&models.OAuthProvider{}).Where("id = ?", id).Update("status", "unhealthy")
+		respondError(w, http.StatusBadRequest, fmt.Sprintf("Configuration test failed: %v", err))
+		return
+	}
+
+	// Update status
+	s.db.Model(&models.OAuthProvider{}).Where("id = ?", id).Update("status", "healthy")
+
+	respondJSON(w, http.StatusOK, map[string]string{
+		"status":  "healthy",
+		"message": "OAuth provider configuration is valid",
 	})
 }

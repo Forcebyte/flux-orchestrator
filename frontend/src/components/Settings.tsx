@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { settingsApi } from '../api';
 import AzureSubscriptions from './AzureSubscriptions';
+import OAuthProviders from './OAuthProviders';
 import '../styles/Settings.css';
 
 const Settings: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'general' | 'azure'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'azure' | 'oauth'>('general');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -196,6 +197,12 @@ const Settings: React.FC = () => {
         >
           Azure AKS
         </button>
+        <button
+          className={`tab-button ${activeTab === 'oauth' ? 'active' : ''}`}
+          onClick={() => setActiveTab('oauth')}
+        >
+          OAuth
+        </button>
       </div>
 
       {activeTab === 'general' && (
@@ -301,6 +308,10 @@ const Settings: React.FC = () => {
 
       {activeTab === 'azure' && (
         <AzureSubscriptions />
+      )}
+
+      {activeTab === 'oauth' && (
+        <OAuthProviders />
       )}
     </div>
     </>
