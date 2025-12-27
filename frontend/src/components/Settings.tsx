@@ -4,7 +4,6 @@ import { settingsApi } from '../api';
 import '../styles/Settings.css';
 
 const Settings: React.FC = () => {
-  const [settings, setSettings] = useState<Setting[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -19,7 +18,6 @@ const Settings: React.FC = () => {
       setLoading(true);
       setError(null);
       const response = await settingsApi.list();
-      setSettings(response.data);
       
       // Find auto sync interval setting
       const autoSync = response.data.find(s => s.key === 'auto_sync_interval_minutes');
