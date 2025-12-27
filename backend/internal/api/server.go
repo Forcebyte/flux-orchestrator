@@ -960,44 +960,39 @@ SameSite: http.SameSiteLaxMode,
 
 // Clear state cookie
 http.SetCookie(w, &http.Cookie{
-Name:   "oauth_state",
-Value:  "",
-Path:   "/",
-MaxAge: -1,
-})
+		Name:     "oauth_state",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
 
-http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
 
 func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
-cookie, err := r.Cookie("session_token")
-if err == nil {
-s.sessionStore.Delete(cookie.Value)
-}
+	cookie, err := r.Cookie("session_token")
+	if err == nil {
+		s.sessionStore.Delete(cookie.Value)
+	}
 
-http.SetCookie(w, &http.Cookie{
-Name:   "session_token",
-Value:  "",
-Path:   "/",
-MaxAge: -1,
-})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
 
-respondJSON(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
+	respondJSON(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
 }
 
 func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
-cookie, err := r.Cookie("session_token")
-if err != nil {
-respondError(w, http.StatusUnauthorized, "Not authenticated")
-return
-}
-
-session, exists := s.sessionStore.Get(cookie.Value)
-if !exists {
-respondError(w, http.StatusUnauthorized, "Invalid session")
-return
-}
-
+	cookie, err := r.Cookie("session_token")
 respondJSON(w, http.StatusOK, session.UserInfo)
 }
 
