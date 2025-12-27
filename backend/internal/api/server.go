@@ -582,26 +582,16 @@ func (s *Server) updateSetting(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update or create setting
-	var setting models.Setting
-	result := s.db.Where("key = ?", key).First(&setting)
-	if result.Error != nil {
-		// Create new setting
-		setting = models.Setting{
-			Key:   key,
-			Value: req.Value,
-		}
-		if err := s.db.Create(&setting).Error; err != nil {
-			respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to create setting: %v", err))
-			return
-		}
-	} else {
-		// Update existing setting
-		if err := s.db.Model(&setting).Update("value", req.Value).Error; err != nil {
-			respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to update setting: %v", err))
-			return
-		}
-		setting.Value = req.Value
+	// Use GORM's Save which does an upsert (insert or update)
+	setting := models.Setting{
+		Key:   key,
+		Value: req.Value,
+	}
+	
+	// Save will update if exists, create if not
+	if err := s.db.Where("key = ?", key).Assign(models.Setting{Value: req.Value}).FirstOrCreate(&setting).Error; err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to save setting: %v", err))
+		return
 	}
 
 	respondJSON(w, http.StatusOK, setting)

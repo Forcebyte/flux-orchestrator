@@ -6,6 +6,7 @@ import { useToast } from '../hooks/useToast';
 import Toast from './Toast';
 import ResourceTree from './ResourceTree';
 import FluxResourceEditDialog from './FluxResourceEditDialog';
+import KustomizationDetail from './KustomizationDetail';
 import '../styles/ClusterDetail.css';
 
 const ClusterDetail: React.FC = () => {
@@ -21,6 +22,7 @@ const ClusterDetail: React.FC = () => {
   const [isReconciling, setIsReconciling] = useState<Set<string>>(new Set());
   const [isSuspending, setIsSuspending] = useState<Set<string>>(new Set());
   const [editingResource, setEditingResource] = useState<FluxResource | null>(null);
+  const [kustomizationDetail, setKustomizationDetail] = useState<{ namespace: string; name: string } | null>(null);
   const { toasts, removeToast, success, error, info } = useToast();
 
   useEffect(() => {
@@ -445,6 +447,17 @@ const ClusterDetail: React.FC = () => {
                                   </div>
                                 </div>
                                 <div className="resource-actions" onClick={(e) => e.stopPropagation()}>
+                                  {resource.kind === 'Kustomization' && (
+                                    <button
+                                      className="btn btn-sm btn-info"
+                                      onClick={() => setKustomizationDetail({
+                                        namespace: resource.namespace,
+                                        name: resource.name
+                                      })}
+                                    >
+                                      📦 View Details
+                                    </button>
+                                  )}
                                   <button
                                     className="btn btn-sm btn-secondary"
                                     onClick={() => handleEdit(resource)}
@@ -561,6 +574,15 @@ const ClusterDetail: React.FC = () => {
           )}
         </div>
       </div>
+
+      {kustomizationDetail && id && (
+        <KustomizationDetail
+          clusterId={id}
+          namespace={kustomizationDetail.namespace}
+          name={kustomizationDetail.name}
+          onClose={() => setKustomizationDetail(null)}
+        />
+      )}
     </div>
   );
 };

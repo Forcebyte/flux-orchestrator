@@ -646,3 +646,19 @@
   cursor: not-allowed;
 }
 
+/* Info Button */
+.btn-info {
+  background-color: #667eea;
+  color: white;
+}
+
+.btn-info:hover {
+  background-color: #5568d3;
+}
+
+.btn-info:disabled {
+  background-color: #8b95ed;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
