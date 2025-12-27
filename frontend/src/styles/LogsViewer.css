@@ -4,7 +4,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--overlay-bg);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -12,7 +12,7 @@
 }
 
 .logs-viewer {
-  background: #1e1e1e;
+  background: var(--logs-viewer-bg);
   border-radius: 8px;
   width: 90%;
   height: 80%;
@@ -26,19 +26,19 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--logs-border);
 }
 
 .logs-header h3 {
   margin: 0;
-  color: #fff;
+  color: var(--text-sidebar);
   font-size: 18px;
 }
 
 .close-button {
   background: none;
   border: none;
-  color: #fff;
+  color: var(--text-sidebar);
   font-size: 28px;
   cursor: pointer;
   padding: 0;
@@ -59,7 +59,7 @@
   display: flex;
   gap: 16px;
   padding: 12px 20px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--logs-border);
   align-items: center;
   flex-wrap: wrap;
 }
@@ -71,7 +71,7 @@
 }
 
 .control-group label {
-  color: #ccc;
+  color: var(--text-secondary);
   font-size: 14px;
   display: flex;
   align-items: center;
@@ -79,9 +79,9 @@
 }
 
 .control-group select {
-  background: #2d2d2d;
-  border: 1px solid #444;
-  color: #fff;
+  background: var(--logs-control-bg);
+  border: 1px solid var(--logs-control-border);
+  color: var(--text-sidebar);
   padding: 6px 10px;
   border-radius: 4px;
   font-size: 14px;
@@ -121,12 +121,12 @@
   flex: 1;
   overflow: auto;
   padding: 16px 20px;
-  background: #0a0a0a;
+  background: var(--logs-bg);
 }
 
 .logs-content pre {
   margin: 0;
-  color: #d4d4d4;
+  color: var(--logs-text);
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.5;

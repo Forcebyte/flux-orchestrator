@@ -28,7 +28,7 @@
 }
 
 .error-container h2 {
-  color: #2d3748;
+  color: var(--text-primary);
   margin-bottom: 10px;
 }
 
@@ -78,10 +78,10 @@
 }
 
 .stat-card {
-  background: white;
+  background: var(--bg-secondary);
   border-radius: 8px;
   padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px var(--card-shadow);
   display: flex;
   align-items: center;
   gap: 16px;
@@ -130,7 +130,7 @@
 .stat-value {
   font-size: 28px;
   font-weight: bold;
-  color: #2d3748;
+  color: var(--text-primary);
   line-height: 1;
 }
 
@@ -162,7 +162,7 @@
 .card-header h3 {
   margin: 0;
   font-size: 18px;
-  color: #2d3748;
+  color: var(--text-primary);
 }
 
 /* Empty State */
@@ -173,7 +173,7 @@
 }
 
 .empty-state h3 {
-  color: #2d3748;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
 
@@ -191,10 +191,10 @@
 }
 
 .resource-group {
-  background: #f7fafc;
+  background: var(--bg-tertiary);
   border-radius: 8px;
   padding: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
 }
 
 .resource-group-header {

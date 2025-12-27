@@ -14,7 +14,7 @@
 .dashboard-header h2 {
   margin: 0 0 8px 0;
   font-size: 28px;
-  color: #1a202c;
+  color: var(--text-primary);
 }
 
 .dashboard-header p {
@@ -41,8 +41,8 @@
 }
 
 .clear-filters-btn {
-  background: #e2e8f0;
-  color: #2d3748;
+  background: var(--border-color);
+  color: var(--text-primary);
   border: none;
   padding: 4px 12px;
   border-radius: 16px;
@@ -53,7 +53,7 @@
 }
 
 .clear-filters-btn:hover {
-  background: #cbd5e0;
+  background: var(--bg-hover);
 }
 
 .refresh-btn {
@@ -93,7 +93,7 @@
 }
 
 .stat-card {
-  background: white;
+  background: var(--bg-secondary);
   border-radius: 12px;
   padding: 24px;
   display: flex;

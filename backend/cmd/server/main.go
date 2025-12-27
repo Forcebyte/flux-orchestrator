@@ -15,7 +15,30 @@ import (
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/encryption"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/k8s"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/models"
+	
+	_ "github.com/Forcebyte/flux-orchestrator/docs"
 )
+
+// @title Flux Orchestrator API
+// @version 1.0
+// @description API for managing Flux CD resources across multiple Kubernetes clusters
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.url https://github.com/Forcebyte/flux-orchestrator
+// @contact.email support@example.com
+
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+
+// @host localhost:8080
+// @BasePath /api/v1
+// @schemes http https
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
 
 func main() {
 	log.Println("Starting Flux Orchestrator...")
