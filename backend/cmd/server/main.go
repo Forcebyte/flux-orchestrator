@@ -15,8 +15,6 @@ import (
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/encryption"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/k8s"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/models"
-	
-	_ "github.com/Forcebyte/flux-orchestrator/docs"
 )
 
 // @title Flux Orchestrator API
