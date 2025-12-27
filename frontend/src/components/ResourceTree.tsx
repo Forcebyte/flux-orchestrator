@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ResourceNode } from '../types';
 import { clusterApi } from '../api';
+import ResourceActionMenu from './ResourceActionMenu';
+import LogsViewer from './LogsViewer';
 import '../styles/ResourceTree.css';
 
 interface ResourceTreeProps {
@@ -12,6 +14,7 @@ const ResourceTree: React.FC<ResourceTreeProps> = ({ clusterId }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  const [logsView, setLogsView] = useState<{ namespace: string; podName: string } | null>(null);
 
   useEffect(() => {
     loadTree();
@@ -130,6 +133,15 @@ const ResourceTree: React.FC<ResourceTreeProps> = ({ clusterId }) => {
               )}
             </div>
           </div>
+
+          <ResourceActionMenu
+            clusterId={clusterId}
+            kind={node.kind}
+            namespace={node.namespace || ''}
+            name={node.name}
+            onLogsClick={() => setLogsView({ namespace: node.namespace || '', podName: node.name })}
+            onActionComplete={loadTree}
+          />
         </div>
         
         {isExpanded && hasChildren && (
@@ -176,6 +188,15 @@ const ResourceTree: React.FC<ResourceTreeProps> = ({ clusterId }) => {
       <div className="tree-footer">
         <span className="tree-count">Total root resources: {tree.length}</span>
       </div>
+
+      {logsView && (
+        <LogsViewer
+          clusterId={clusterId}
+          namespace={logsView.namespace}
+          podName={logsView.podName}
+          onClose={() => setLogsView(null)}
+        />
+      )}
     </div>
   );
 };

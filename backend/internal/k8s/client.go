@@ -4,26 +4,33 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/models"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
 // Client manages Kubernetes clients for multiple clusters
 type Client struct {
-	clients map[string]dynamic.Interface
+	clients       map[string]dynamic.Interface
+	typedClients  map[string]*kubernetes.Clientset
+	configs       map[string]*rest.Config
 }
 
 // NewClient creates a new multi-cluster Kubernetes client
 func NewClient() *Client {
 	return &Client{
-		clients: make(map[string]dynamic.Interface),
+		clients:      make(map[string]dynamic.Interface),
+		typedClients: make(map[string]*kubernetes.Clientset),
+		configs:      make(map[string]*rest.Config),
 	}
 }
 
@@ -39,7 +46,14 @@ func (c *Client) AddCluster(clusterID, kubeconfig string) error {
 		return fmt.Errorf("failed to create dynamic client: %w", err)
 	}
 
+	typedClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("failed to create typed client: %w", err)
+	}
+
 	c.clients[clusterID] = client
+	c.typedClients[clusterID] = typedClient
+	c.configs[clusterID] = config
 	return nil
 }
 
@@ -55,7 +69,14 @@ func (c *Client) AddInClusterConfig(clusterID string) error {
 		return fmt.Errorf("failed to create dynamic client: %w", err)
 	}
 
+	typedClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("failed to create typed client: %w", err)
+	}
+
 	c.clients[clusterID] = client
+	c.typedClients[clusterID] = typedClient
+	c.configs[clusterID] = config
 	return nil
 }
 
@@ -400,23 +421,60 @@ func (c *Client) GetResourcesCreatedByFlux(ctx context.Context, clusterID, kind,
 			continue
 		}
 
-		// Parse inventory entry format: "<id>_<namespace>_<name>"
+		// Parse inventory entry
 		id, _, _ := unstructured.NestedString(entryMap, "id")
 		v, _, _ := unstructured.NestedString(entryMap, "v")
 
+		// Inventory ID format: "<namespace>_<name>_<group>_<kind>"
+		// Parse the ID to extract components
+		parts := splitInventoryID(id)
+		
 		resourceInfo := map[string]interface{}{
 			"id":      id,
 			"version": v,
 		}
+		
+		if len(parts) >= 4 {
+			resourceInfo["Namespace"] = parts[0]
+			resourceInfo["Name"] = parts[1]
+			resourceInfo["Group"] = parts[2]
+			resourceInfo["Kind"] = parts[3]
+		} else if len(parts) == 3 {
+			// Cluster-scoped resource (no namespace)
+			resourceInfo["Namespace"] = ""
+			resourceInfo["Name"] = parts[0]
+			resourceInfo["Group"] = parts[1]
+			resourceInfo["Kind"] = parts[2]
+		}
 
-		// Try to fetch the actual resource
-		// Inventory format is typically: namespace_name_group_kind
-		// We'll try to get more details if possible
 		resources = append(resources, resourceInfo)
 	}
 
 	return resources, nil
 }
+
+// splitInventoryID splits a Flux inventory ID into components
+func splitInventoryID(id string) []string {
+	// Flux inventory format: namespace_name_group_kind
+	// For cluster-scoped: _name_group_kind
+	var parts []string
+	var current string
+	
+	for _, char := range id {
+		if char == '_' {
+			parts = append(parts, current)
+			current = ""
+		} else {
+			current += string(char)
+		}
+	}
+	if current != "" {
+		parts = append(parts, current)
+	}
+	
+	return parts
+}
+
 
 // GetFluxStats gets statistics about Flux resources in a cluster
 func (c *Client) GetFluxStats(clusterID string) (map[string]interface{}, error) {
@@ -632,6 +690,75 @@ func (c *Client) GetResourceTree(ctx context.Context, clusterID string) ([]Resou
 		}
 	}
 
+	// Add Flux-managed resources as children of their parent Kustomization/HelmRelease
+	for _, res := range allResources {
+		if res.Kind == "Kustomization" || res.Kind == "HelmRelease" {
+			// Get managed resources from inventory
+			managedResources, err := c.GetResourcesCreatedByFlux(ctx, clusterID, res.Kind, res.Namespace, res.Name)
+			if err == nil && len(managedResources) > 0 {
+				for _, managedRes := range managedResources {
+					// Parse the resource ID (format: kind_namespace_name_version)
+					id, _ := managedRes["id"].(string)
+					version, _ := managedRes["version"].(string)
+					
+					if id != "" {
+						// Try to find this resource in our allResources map
+						// The ID format from inventory is "kind_namespace_name"
+						parts := []string{}
+						for _, part := range []string{"Group", "Version", "Kind", "Namespace", "Name"} {
+							if val, ok := managedRes[part].(string); ok && val != "" {
+								parts = append(parts, val)
+							}
+						}
+						
+						kind, _ := managedRes["Kind"].(string)
+						namespace, _ := managedRes["Namespace"].(string)
+						name, _ := managedRes["Name"].(string)
+						
+						if kind != "" && name != "" {
+							// Create resource ID matching our format
+							var managedID string
+							if namespace != "" {
+								managedID = fmt.Sprintf("%s/%s/%s", namespace, kind, name)
+							} else {
+								managedID = fmt.Sprintf("/%s/%s", kind, name)
+							}
+							
+							// If we found this resource, add it as a child
+							if managedNode, exists := allResources[managedID]; exists {
+								// Remove from root resources if it's there
+								for i, rootID := range rootResources {
+									if rootID == managedID {
+										rootResources = append(rootResources[:i], rootResources[i+1:]...)
+										break
+									}
+								}
+								res.Children = append(res.Children, *managedNode)
+							} else {
+								// Resource not in our list, create a simple node for it
+								simpleNode := ResourceNode{
+									ID:        managedID,
+									Kind:      kind,
+									Name:      name,
+									Namespace: namespace,
+									Status:    "Unknown",
+									Health:    "Unknown",
+									CreatedAt: "",
+									Children:  []ResourceNode{},
+									Metadata: map[string]interface{}{
+										"version": version,
+										"source":  "flux-inventory",
+									},
+								}
+								res.Children = append(res.Children, simpleNode)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// Build tree from root resources
 	var tree []ResourceNode
 	for _, rootID := range rootResources {
@@ -708,4 +835,227 @@ func (c *Client) parseResourceNode(obj *unstructured.Unstructured, kind string) 
 		Children:  []ResourceNode{},
 		Metadata:  metadata,
 	}
+}
+
+// GetResourceByKind gets a specific resource by kind, namespace, and name
+func (c *Client) GetResourceByKind(ctx context.Context, clusterID, kind, namespace, name string) (*unstructured.Unstructured, schema.GroupVersionResource, error) {
+	client, err := c.GetClient(clusterID)
+	if err != nil {
+		return nil, schema.GroupVersionResource{}, err
+	}
+
+	gvr, err := c.getGVRForGenericKind(kind)
+	if err != nil {
+		return nil, schema.GroupVersionResource{}, err
+	}
+
+	var resource *unstructured.Unstructured
+	if namespace != "" {
+		resource, err = client.Resource(gvr).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	} else {
+		resource, err = client.Resource(gvr).Get(ctx, name, metav1.GetOptions{})
+	}
+
+	if err != nil {
+		return nil, schema.GroupVersionResource{}, fmt.Errorf("failed to get resource: %w", err)
+	}
+
+	return resource, gvr, nil
+}
+
+// getGVRForGenericKind returns GVR for common Kubernetes resources
+func (c *Client) getGVRForGenericKind(kind string) (schema.GroupVersionResource, error) {
+	switch kind {
+	// Apps
+	case "Deployment":
+		return schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}, nil
+	case "StatefulSet":
+		return schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "statefulsets"}, nil
+	case "DaemonSet":
+		return schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "daemonsets"}, nil
+	case "ReplicaSet":
+		return schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "replicasets"}, nil
+	// Core
+	case "Pod":
+		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}, nil
+	case "Service":
+		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}, nil
+	case "ConfigMap":
+		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "configmaps"}, nil
+	case "Secret":
+		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}, nil
+	case "Namespace":
+		return schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}, nil
+	// Networking
+	case "Ingress":
+		return schema.GroupVersionResource{Group: "networking.k8s.io", Version: "v1", Resource: "ingresses"}, nil
+	// Batch
+	case "Job":
+		return schema.GroupVersionResource{Group: "batch", Version: "v1", Resource: "jobs"}, nil
+	case "CronJob":
+		return schema.GroupVersionResource{Group: "batch", Version: "v1", Resource: "cronjobs"}, nil
+	// Flux
+	case "Kustomization":
+		return c.getGVRForKind(kind)
+	case "HelmRelease":
+		return c.getGVRForKind(kind)
+	case "GitRepository":
+		return c.getGVRForKind(kind)
+	case "HelmRepository":
+		return c.getGVRForKind(kind)
+	default:
+		return schema.GroupVersionResource{}, fmt.Errorf("unknown kind: %s", kind)
+	}
+}
+
+// ScaleResource scales a Deployment, StatefulSet, or ReplicaSet
+func (c *Client) ScaleResource(ctx context.Context, clusterID, kind, namespace, name string, replicas int32) error {
+	resource, gvr, err := c.GetResourceByKind(ctx, clusterID, kind, namespace, name)
+	if err != nil {
+		return err
+	}
+
+	// Update replicas in spec
+	if err := unstructured.SetNestedField(resource.Object, int64(replicas), "spec", "replicas"); err != nil {
+		return fmt.Errorf("failed to set replicas: %w", err)
+	}
+
+	client, _ := c.GetClient(clusterID)
+	_, err = client.Resource(gvr).Namespace(namespace).Update(ctx, resource, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update resource: %w", err)
+	}
+
+	return nil
+}
+
+// RestartResource performs a rollout restart for Deployments, StatefulSets, or DaemonSets
+func (c *Client) RestartResource(ctx context.Context, clusterID, kind, namespace, name string) error {
+	resource, gvr, err := c.GetResourceByKind(ctx, clusterID, kind, namespace, name)
+	if err != nil {
+		return err
+	}
+
+	// Add/update restart annotation
+	annotations := resource.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+	resource.SetAnnotations(annotations)
+
+	client, _ := c.GetClient(clusterID)
+	_, err = client.Resource(gvr).Namespace(namespace).Update(ctx, resource, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to restart resource: %w", err)
+	}
+
+	return nil
+}
+
+// DeletePod deletes a specific pod
+func (c *Client) DeletePod(ctx context.Context, clusterID, namespace, name string) error {
+	client, err := c.GetClient(clusterID)
+	if err != nil {
+		return err
+	}
+
+	gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+	err = client.Resource(gvr).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to delete pod: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateResourceSpec updates a resource's spec with a patch
+func (c *Client) UpdateResourceSpec(ctx context.Context, clusterID, kind, namespace, name string, patch map[string]interface{}) error {
+	resource, gvr, err := c.GetResourceByKind(ctx, clusterID, kind, namespace, name)
+	if err != nil {
+		return err
+	}
+
+	// Apply patch to spec
+	if specPatch, ok := patch["spec"].(map[string]interface{}); ok {
+		currentSpec, found, err := unstructured.NestedMap(resource.Object, "spec")
+		if err != nil {
+			return fmt.Errorf("failed to get spec: %w", err)
+		}
+		if !found {
+			currentSpec = make(map[string]interface{})
+		}
+
+		// Deep merge patch into current spec
+		for key, value := range specPatch {
+			currentSpec[key] = value
+		}
+
+		if err := unstructured.SetNestedMap(resource.Object, currentSpec, "spec"); err != nil {
+			return fmt.Errorf("failed to set spec: %w", err)
+		}
+	}
+
+	client, _ := c.GetClient(clusterID)
+	_, err = client.Resource(gvr).Namespace(namespace).Update(ctx, resource, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update resource: %w", err)
+	}
+
+	return nil
+}
+
+// GetPodLogs retrieves logs from a pod
+func (c *Client) GetPodLogs(ctx context.Context, clusterID, namespace, podName, containerName string, tailLines int64, follow bool) (string, error) {
+typedClient, ok := c.typedClients[clusterID]
+if !ok {
+return "", fmt.Errorf("cluster %s not found", clusterID)
+}
+
+podLogOpts := &corev1.PodLogOptions{
+Container: containerName,
+Follow:    follow,
+}
+
+if tailLines > 0 {
+podLogOpts.TailLines = &tailLines
+}
+
+req := typedClient.CoreV1().Pods(namespace).GetLogs(podName, podLogOpts)
+podLogs, err := req.Stream(ctx)
+if err != nil {
+return "", fmt.Errorf("failed to open log stream: %w", err)
+}
+defer podLogs.Close()
+
+buf := make([]byte, 2000*1024) // 2MB buffer
+n, err := podLogs.Read(buf)
+if err != nil && err != io.EOF {
+return "", fmt.Errorf("failed to read logs: %w", err)
+}
+
+return string(buf[:n]), nil
+}
+
+// GetPodContainers gets the list of containers in a pod
+func (c *Client) GetPodContainers(ctx context.Context, clusterID, namespace, podName string) ([]string, error) {
+typedClient, ok := c.typedClients[clusterID]
+if !ok {
+return nil, fmt.Errorf("cluster %s not found", clusterID)
+}
+
+pod, err := typedClient.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+if err != nil {
+return nil, fmt.Errorf("failed to get pod: %w", err)
+}
+
+containers := make([]string, 0)
+for _, container := range pod.Spec.Containers {
+containers = append(containers, container.Name)
+}
+for _, container := range pod.Spec.InitContainers {
+containers = append(containers, container.Name)
+}
+
+return containers, nil
 }

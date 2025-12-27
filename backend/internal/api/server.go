@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/database"
@@ -69,6 +70,14 @@ func (s *Server) routes() {
 
 	// Sync resources from cluster
 	api.HandleFunc("/clusters/{id}/sync", s.syncClusterResources).Methods("POST", "OPTIONS")
+
+	// Resource management
+	api.HandleFunc("/clusters/{id}/resources/{kind}/{namespace}/{name}/scale", s.scaleResource).Methods("POST", "OPTIONS")
+	api.HandleFunc("/clusters/{id}/resources/{kind}/{namespace}/{name}/restart", s.restartResource).Methods("POST", "OPTIONS")
+	api.HandleFunc("/clusters/{id}/resources/{kind}/{namespace}/{name}/spec", s.updateResourceSpec).Methods("PUT", "OPTIONS")
+	api.HandleFunc("/clusters/{id}/pods/{namespace}/{name}/logs", s.getPodLogs).Methods("GET", "OPTIONS")
+	api.HandleFunc("/clusters/{id}/pods/{namespace}/{name}/containers", s.getPodContainers).Methods("GET", "OPTIONS")
+	api.HandleFunc("/clusters/{id}/pods/{namespace}/{name}", s.deletePod).Methods("DELETE", "OPTIONS")
 
 	// Settings
 	api.HandleFunc("/settings", s.getSettings).Methods("GET", "OPTIONS")
@@ -639,4 +648,129 @@ func (s *Server) updateFluxResource(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{
 		"message": "Resource updated successfully",
 	})
+}
+
+// scaleResource scales a Deployment, StatefulSet, or ReplicaSet
+func (s *Server) scaleResource(w http.ResponseWriter, r *http.Request) {
+vars := mux.Vars(r)
+clusterID := vars["id"]
+kind := vars["kind"]
+namespace := vars["namespace"]
+name := vars["name"]
+
+var req struct {
+Replicas int32 `json:"replicas"`
+}
+if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+respondError(w, http.StatusBadRequest, "Invalid request body")
+return
+}
+
+ctx := r.Context()
+if err := s.k8sClient.ScaleResource(ctx, clusterID, kind, namespace, name, req.Replicas); err != nil {
+respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to scale resource: %v", err))
+return
+}
+
+respondJSON(w, http.StatusOK, map[string]string{"message": "Resource scaled successfully"})
+}
+
+// restartResource performs a rollout restart
+func (s *Server) restartResource(w http.ResponseWriter, r *http.Request) {
+vars := mux.Vars(r)
+clusterID := vars["id"]
+kind := vars["kind"]
+namespace := vars["namespace"]
+name := vars["name"]
+
+ctx := r.Context()
+if err := s.k8sClient.RestartResource(ctx, clusterID, kind, namespace, name); err != nil {
+respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to restart resource: %v", err))
+return
+}
+
+respondJSON(w, http.StatusOK, map[string]string{"message": "Resource restarted successfully"})
+}
+
+// updateResourceSpec updates a resource's spec
+func (s *Server) updateResourceSpec(w http.ResponseWriter, r *http.Request) {
+vars := mux.Vars(r)
+clusterID := vars["id"]
+kind := vars["kind"]
+namespace := vars["namespace"]
+name := vars["name"]
+
+var patch map[string]interface{}
+if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+respondError(w, http.StatusBadRequest, "Invalid request body")
+return
+}
+
+ctx := r.Context()
+if err := s.k8sClient.UpdateResourceSpec(ctx, clusterID, kind, namespace, name, patch); err != nil {
+respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to update resource: %v", err))
+return
+}
+
+respondJSON(w, http.StatusOK, map[string]string{"message": "Resource updated successfully"})
+}
+
+// getPodLogs retrieves logs from a pod
+func (s *Server) getPodLogs(w http.ResponseWriter, r *http.Request) {
+vars := mux.Vars(r)
+clusterID := vars["id"]
+namespace := vars["namespace"]
+podName := vars["name"]
+
+containerName := r.URL.Query().Get("container")
+tailLinesStr := r.URL.Query().Get("tail")
+
+var tailLines int64 = 1000
+if tailLinesStr != "" {
+if parsed, err := strconv.ParseInt(tailLinesStr, 10, 64); err == nil {
+tailLines = parsed
+}
+}
+
+ctx := r.Context()
+logs, err := s.k8sClient.GetPodLogs(ctx, clusterID, namespace, podName, containerName, tailLines, false)
+if err != nil {
+respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get logs: %v", err))
+return
+}
+
+respondJSON(w, http.StatusOK, map[string]string{"logs": logs})
+}
+
+// getPodContainers gets the list of containers in a pod
+func (s *Server) getPodContainers(w http.ResponseWriter, r *http.Request) {
+vars := mux.Vars(r)
+clusterID := vars["id"]
+namespace := vars["namespace"]
+podName := vars["name"]
+
+ctx := r.Context()
+containers, err := s.k8sClient.GetPodContainers(ctx, clusterID, namespace, podName)
+if err != nil {
+respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get containers: %v", err))
+return
+}
+
+respondJSON(w, http.StatusOK, map[string]interface{}{"containers": containers})
+}
+
+// deletePod deletes a pod
+func (s *Server) deletePod(w http.ResponseWriter, r *http.Request) {
+vars := mux.Vars(r)
+clusterID := vars["id"]
+namespace := vars["namespace"]
+podName := vars["name"]
+
+ctx := r.Context()
+if err := s.k8sClient.DeletePod(ctx, clusterID, namespace, podName); err != nil {
+respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to delete pod: %v", err))
+return
+}
+
+respondJSON(w, http.StatusOK, map[string]string{"message": "Pod deleted successfully"})
 }
