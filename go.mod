@@ -3,6 +3,8 @@ module github.com/Forcebyte/flux-orchestrator
 go 1.25.0
 
 require (
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1
+	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v4 v4.8.0
 	github.com/fernet/fernet-go v0.0.0-20240119011108-303da6aec611
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
@@ -18,9 +20,7 @@ require (
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.2 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice/v4 v4.8.0 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.6.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
@@ -50,7 +50,6 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
