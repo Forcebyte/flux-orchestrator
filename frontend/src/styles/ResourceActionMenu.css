@@ -1,0 +1,192 @@
+.resource-action-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.action-menu-trigger {
+  background: none;
+  border: 1px solid #444;
+  color: #ccc;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.action-menu-trigger:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: #666;
+}
+
+.action-menu-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-menu-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+}
+
+.action-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  background: #2d2d2d;
+  border: 1px solid #444;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 160px;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.action-menu-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  color: #ccc;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+  border-bottom: 1px solid #333;
+}
+
+.action-menu-dropdown button:last-child {
+  border-bottom: none;
+}
+
+.action-menu-dropdown button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.action-menu-dropdown button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-menu-dropdown button.danger {
+  color: #f87171;
+}
+
+.action-menu-dropdown button.danger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.scale-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1001;
+}
+
+.scale-dialog {
+  background: #2d2d2d;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 24px;
+  min-width: 320px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.scale-dialog h3 {
+  margin: 0 0 8px 0;
+  color: #fff;
+  font-size: 18px;
+}
+
+.scale-dialog p {
+  margin: 0 0 20px 0;
+  color: #888;
+  font-size: 14px;
+}
+
+.scale-input-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.scale-input-group label {
+  color: #ccc;
+  font-size: 14px;
+  min-width: 70px;
+}
+
+.scale-input-group input {
+  flex: 1;
+  background: #1e1e1e;
+  border: 1px solid #444;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.scale-input-group input:focus {
+  outline: none;
+  border-color: #0066cc;
+}
+
+.scale-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.scale-dialog-actions button {
+  padding: 8px 16px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+  background: #1e1e1e;
+  color: #ccc;
+}
+
+.scale-dialog-actions button:hover:not(:disabled) {
+  background: #333;
+  border-color: #666;
+}
+
+.scale-dialog-actions button.primary {
+  background: #0066cc;
+  border-color: #0066cc;
+  color: #fff;
+}
+
+.scale-dialog-actions button.primary:hover:not(:disabled) {
+  background: #0052a3;
+  border-color: #0052a3;
+}
+
+.scale-dialog-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

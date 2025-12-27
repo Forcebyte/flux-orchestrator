@@ -56,6 +56,17 @@ stringData:
   POSTGRES_PASSWORD: "changeme"
 ---
 apiVersion: v1
+kind: Secret
+metadata:
+  name: flux-orchestrator-encryption
+  namespace: flux-orchestrator
+type: Opaque
+stringData:
+  # IMPORTANT: Generate a new key using: python3 -c "import base64; import os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+  # Or use the Go utility: go run -tags=tools ./tools/generate-key
+  ENCRYPTION_KEY: "CHANGE_ME_GENERATE_A_NEW_KEY_SEE_COMMENT_ABOVE"
+---
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: flux-orchestrator-config
@@ -68,6 +79,9 @@ data:
   DB_NAME: "flux_orchestrator"
   DB_SSLMODE: "disable"
   PORT: "8080"
+  SCRAPE_IN_CLUSTER: "true"
+  IN_CLUSTER_NAME: "flux-orchestrator-cluster"
+  IN_CLUSTER_DESCRIPTION: "Local cluster where Flux Orchestrator is deployed"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -171,6 +185,11 @@ spec:
             secretKeyRef:
               name: flux-orchestrator-db
               key: POSTGRES_PASSWORD
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: flux-orchestrator-encryption
+              key: ENCRYPTION_KEY
         - name: DB_SSLMODE
           valueFrom:
             configMapKeyRef:
@@ -181,6 +200,21 @@ spec:
             configMapKeyRef:
               name: flux-orchestrator-config
               key: PORT
+        - name: SCRAPE_IN_CLUSTER
+          valueFrom:
+            configMapKeyRef:
+              name: flux-orchestrator-config
+              key: SCRAPE_IN_CLUSTER
+        - name: IN_CLUSTER_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: flux-orchestrator-config
+              key: IN_CLUSTER_NAME
+        - name: IN_CLUSTER_DESCRIPTION
+          valueFrom:
+            configMapKeyRef:
+              name: flux-orchestrator-config
+              key: IN_CLUSTER_DESCRIPTION
 ---
 apiVersion: v1
 kind: Service

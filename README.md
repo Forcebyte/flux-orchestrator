@@ -1,15 +1,18 @@
-# Flux Orchestrator
+<div align="center">
 
-A comprehensive multi-cluster GitOps management platform for Flux CD, providing a centralized UI and API similar to ArgoCD for managing Flux across multiple Kubernetes clusters.
+<img src=".github/logo.png" alt="Flux Orchestrator Logo" width="200"/>
 
-## Features
+# Flux Orchestrator (v2)
 
-- 🎯 **Multi-Cluster Management**: Monitor and manage Flux resources across multiple Kubernetes clusters from a single interface
-- 📊 **Unified Dashboard**: ArgoCD-inspired UI with real-time status of all Flux resources
-- 🔄 **Resource Synchronization**: Trigger reconciliation for individual resources or entire clusters
-- 💾 **Flexible Database Backend**: Support for PostgreSQL and MySQL
-- 🔐 **Secure**: RBAC-enabled with secure kubeconfig storage
-- 🚀 **Easy Deployment**: Deploy to a central cluster with Kubernetes manifests
+<p><i>A comprehensive multi-cluster GitOps management platform for Flux CD</i></p>
+
+</div>
+
+
+
+This service provides a centralized UI and API similar to ArgoCD for managing Flux across multiple Kubernetes clusters.
+
+This allows an easy to access and manage method to view, validate, and remediate FluxCD configurations on clusters at scale
 
 ## Architecture
 
@@ -62,7 +65,16 @@ The Flux Orchestrator consists of:
      mysql:8
    ```
 
-3. **Start the backend**
+3. **Generate an encryption key**
+   ```bash
+   # Using Python
+   python3 -c "import base64; import os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+   
+   # Or using Go
+   go run ./tools/generate-key/main.go
+   ```
+
+4. **Start the backend**
 
    **For PostgreSQL:**
    ```bash
@@ -74,6 +86,7 @@ The Flux Orchestrator consists of:
    export DB_NAME=flux_orchestrator
    export DB_SSLMODE=disable
    export PORT=8080
+   export ENCRYPTION_KEY="your-generated-key-here"
 
    go run backend/cmd/server/main.go
    ```
@@ -87,11 +100,12 @@ The Flux Orchestrator consists of:
    export DB_PASSWORD=flux
    export DB_NAME=flux_orchestrator
    export PORT=8080
+   export ENCRYPTION_KEY="your-generated-key-here"
 
    go run backend/cmd/server/main.go
    ```
 
-4. **Start the frontend**
+5. **Start the frontend**
    ```bash
    cd frontend
    npm install
@@ -105,7 +119,7 @@ The Flux Orchestrator consists of:
 
 #### Using Pre-built Docker Image from GitHub Container Registry
 
-The easiest way to deploy is using our pre-built images:
+The easiest way to deploy is using one of the pre-built images:
 
 ```bash
 # Pull the latest image
@@ -169,22 +183,6 @@ To use an external PostgreSQL or MySQL database instead of the bundled one:
    ```
 3. Update the Secret with your database password
 
-#### Building Your Own Docker Image
-
-1. **Build the Docker image**
-   ```bash
-   docker build -t flux-orchestrator:latest .
-   ```
-
-2. **Push to your registry**
-   ```bash
-   docker tag flux-orchestrator:latest your-registry/flux-orchestrator:latest
-   docker push your-registry/flux-orchestrator:latest
-   ```
-
-3. **Update Kubernetes manifests**
-   Edit `deploy/kubernetes/manifests.yaml` and change the image reference
-
 ## Usage
 
 ### Adding a Cluster
@@ -221,25 +219,6 @@ The dashboard provides an overview of all resources across all clusters:
 - Status breakdown (Ready/Not Ready/Unknown)
 - Resources grouped by cluster
 
-## API Documentation
-
-### Clusters
-
-- `GET /api/v1/clusters` - List all clusters
-- `POST /api/v1/clusters` - Create a new cluster
-- `GET /api/v1/clusters/{id}` - Get cluster details
-- `PUT /api/v1/clusters/{id}` - Update cluster
-- `DELETE /api/v1/clusters/{id}` - Delete cluster
-- `GET /api/v1/clusters/{id}/health` - Check cluster health
-- `POST /api/v1/clusters/{id}/sync` - Sync cluster resources
-
-### Resources
-
-- `GET /api/v1/resources` - List all resources (with optional `?kind=` filter)
-- `GET /api/v1/clusters/{id}/resources` - List resources for a cluster
-- `GET /api/v1/resources/{id}` - Get resource details
-- `POST /api/v1/resources/reconcile` - Trigger resource reconciliation
-
 ## Configuration
 
 ### Environment Variables
@@ -253,7 +232,55 @@ The dashboard provides an overview of all resources across all clusters:
 | `DB_PASSWORD` | Database password | `postgres` |
 | `DB_NAME` | Database name | `flux_orchestrator` |
 | `DB_SSLMODE` | SSL mode (PostgreSQL only) | `disable` |
+| `ENCRYPTION_KEY` | Fernet encryption key for kubeconfigs | **(Required)** |
 | `PORT` | API server port | `8080` |
+| `SCRAPE_IN_CLUSTER` | Enable in-cluster scraping | `false` |
+| `IN_CLUSTER_NAME` | Name for in-cluster configuration | `in-cluster` |
+| `IN_CLUSTER_DESCRIPTION` | Description for in-cluster | `Local cluster...` |
+| **OAuth Configuration** | | |
+| `OAUTH_ENABLED` | Enable OAuth authentication | `false` |
+| `OAUTH_PROVIDER` | OAuth provider (`github` or `entra`) | - |
+| `OAUTH_CLIENT_ID` | OAuth app client ID | - |
+| `OAUTH_CLIENT_SECRET` | OAuth app client secret | - |
+| `OAUTH_REDIRECT_URL` | OAuth callback URL | `http://localhost:8080/api/v1/auth/callback` |
+| `OAUTH_SCOPES` | Comma-separated OAuth scopes | - |
+| `OAUTH_ALLOWED_USERS` | Comma-separated allowed user emails (optional) | - |
+
+### OAuth Authentication (Optional)
+
+Flux Orchestrator supports optional OAuth authentication with GitHub and Microsoft Entra (Azure AD). When enabled, users must authenticate before accessing the application.
+
+**Quick Setup:**
+
+1. **Create OAuth App** (GitHub or Azure AD)
+2. **Configure Environment Variables:**
+   ```bash
+   OAUTH_ENABLED=true
+   OAUTH_PROVIDER=github  # or "entra"
+   OAUTH_CLIENT_ID=your_client_id
+   OAUTH_CLIENT_SECRET=your_client_secret
+   OAUTH_REDIRECT_URL=http://localhost:8080/api/v1/auth/callback
+   ```
+3. **Restart Application**
+
+For detailed setup instructions, see **[docs/OAUTH.md](docs/OAUTH.md)**.
+
+
+## Security
+
+### Kubeconfig Encryption
+
+All kubeconfig data is encrypted at rest using **Fernet** (AES-128-CBC with HMAC-SHA256) before being stored in the database. This ensures that even with direct database access, the kubeconfig contents cannot be read without the encryption key.
+
+**Setup:**
+1. Generate an encryption key:
+   ```bash
+   python3 -c "import base64; import os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+   ```
+2. Set the `ENCRYPTION_KEY` environment variable
+3. Store the key securely (Kubernetes Secret, secrets manager, etc.)
+
+For more details, see [docs/ENCRYPTION.md](docs/ENCRYPTION.md).
 
 ### RBAC Permissions
 
@@ -265,51 +292,49 @@ The orchestrator requires the following Kubernetes permissions:
 
 See `deploy/kubernetes/manifests.yaml` for the complete RBAC configuration.
 
-## Architecture Details
+## Azure AKS Integration
 
-### Backend (Go)
+Flux Orchestrator can automatically discover and manage AKS clusters using Azure service principals. This provides seamless integration with your Azure infrastructure without manually exporting kubeconfig files.
 
-```
-backend/
-├── cmd/server/         # Main application entry point
-└── internal/
-    ├── api/           # HTTP handlers and routing
-    ├── database/      # Database connection and schema
-    ├── k8s/           # Kubernetes client wrapper
-    └── models/        # Data models
-```
+### Prerequisites
 
-### Frontend (React/TypeScript)
+1. **Azure Service Principal** with permissions:
+   - Azure Kubernetes Service Cluster User Role
+   - Reader role on subscription or resource groups
 
-```
-frontend/
-├── src/
-│   ├── components/    # React components
-│   ├── api.ts        # API client
-│   ├── types.ts      # TypeScript types
-│   └── App.tsx       # Main application
-└── public/           # Static assets
-```
+2. **kubelogin** installed on the server running Flux Orchestrator:
+   ```bash
+   # Install kubelogin
+   brew install Azure/kubelogin/kubelogin  # macOS
+   # OR download from: https://github.com/Azure/kubelogin/releases
+   ```
 
-### Database Schema
+### Setup
 
-**clusters**
-- `id`: Unique cluster identifier
-- `name`: Cluster name
-- `description`: Optional description
-- `kubeconfig`: Encrypted kubeconfig
-- `status`: Health status (healthy/unhealthy/unknown)
-- `created_at`, `updated_at`: Timestamps
+1. **Create a Service Principal**:
+   ```bash
+   az ad sp create-for-rbac --name flux-orchestrator-sp --role "Azure Kubernetes Service Cluster User Role" --scopes /subscriptions/{subscription-id}
+   ```
 
-**flux_resources**
-- `id`: Unique resource identifier
-- `cluster_id`: Foreign key to clusters
-- `kind`: Resource type (Kustomization, HelmRelease, etc.)
-- `name`, `namespace`: Resource identifiers
-- `status`: Resource status (Ready/NotReady/Unknown)
-- `message`: Status message
-- `last_reconcile`: Last reconciliation timestamp
-- `metadata`: JSON blob with full resource data
+2. **Note the credentials** from the output:
+   - `appId` → Client ID
+   - `password` → Client Secret
+   - `tenant` → Tenant ID
+
+3. **Add Azure Subscription** in the UI:
+   - Go to Settings → Azure AKS tab
+   - Click "Add Subscription"
+   - Enter your subscription details and service principal credentials
+   - Click "Test Connection" to verify
+
+4. **Discover and Sync Clusters**:
+   - Click the 🔍 icon to discover AKS clusters
+   - Review the list of discovered clusters
+   - Click "Sync" to import all clusters
+
+Clusters imported from Azure will be marked with a ☁️ badge and can be managed like any other cluster.
+
+For detailed Azure integration documentation, see [docs/AZURE_AKS.md](docs/AZURE_AKS.md).
 
 ## Contributing
 
@@ -323,3 +348,4 @@ MIT License - see LICENSE file for details
 
 - Inspired by [ArgoCD](https://argoproj.github.io/cd/)
 - Built for [Flux CD](https://fluxcd.io/)
+

@@ -1,0 +1,45 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+!README.md
+docs/
+LICENSE
+
+# Build artifacts
+backend/flux-orchestrator
+frontend/build
+frontend/node_modules
+frontend/dist
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test files
+*_test.go
+**/*_test.go
+coverage.txt
+
+# CI/CD
+.github/
+deploy/
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore

@@ -6,11 +6,15 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/api"
+	"github.com/Forcebyte/flux-orchestrator/backend/internal/auth"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/database"
+	"github.com/Forcebyte/flux-orchestrator/backend/internal/encryption"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/k8s"
+	"github.com/Forcebyte/flux-orchestrator/backend/internal/models"
 )
 
 func main() {
@@ -27,44 +31,141 @@ func main() {
 		SSLMode:  getEnv("DB_SSLMODE", "disable"),
 	}
 
+	// Initialize encryption
+	encryptionKey := getEnv("ENCRYPTION_KEY", "")
+	if encryptionKey == "" {
+		log.Fatal("ENCRYPTION_KEY environment variable is required")
+	}
+
+	encryptor, err := encryption.NewEncryptor(encryptionKey)
+	if err != nil {
+		log.Fatalf("Failed to initialize encryptor: %v", err)
+	}
+	log.Println("Encryption initialized successfully")
+
 	// Connect to database
 	db, err := database.New(dbConfig)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close()
+	sqlDB, _ := db.DB.DB()
+	defer sqlDB.Close()
 
-	// Initialize database schema
-	if err := db.InitSchema(); err != nil {
+	// Initialize database schema with GORM AutoMigrate
+	if err := db.InitSchema(&models.Cluster{}, &models.FluxResource{}, &models.AzureSubscription{}, &models.Activity{}); err != nil {
 		log.Fatalf("Failed to initialize schema: %v", err)
 	}
 
 	// Create Kubernetes client
 	k8sClient := k8s.NewClient()
 
-	// Load existing clusters from database
-	rows, err := db.Query("SELECT id, kubeconfig FROM clusters")
-	if err != nil {
-		log.Printf("Warning: Failed to load existing clusters: %v", err)
-	} else {
-		defer rows.Close()
-		for rows.Next() {
-			var id, kubeconfig string
-			if err := rows.Scan(&id, &kubeconfig); err != nil {
-				continue
-			}
-			if err := k8sClient.AddCluster(id, kubeconfig); err != nil {
-				log.Printf("Warning: Failed to add cluster %s: %v", id, err)
+	// Check if we should scrape the cluster we're running in
+	scrapeInCluster := getEnv("SCRAPE_IN_CLUSTER", "false") == "true"
+	inClusterName := getEnv("IN_CLUSTER_NAME", "in-cluster")
+	inClusterDesc := getEnv("IN_CLUSTER_DESCRIPTION", "Local cluster where Flux Orchestrator is deployed")
+
+	if scrapeInCluster {
+		log.Println("SCRAPE_IN_CLUSTER enabled - attempting to register in-cluster configuration")
+		
+		// Check if in-cluster config already exists
+		var existingCluster models.Cluster
+		err := db.Where("name = ?", inClusterName).First(&existingCluster).Error
+		
+		if err != nil && err.Error() != "record not found" {
+			log.Printf("Warning: Failed to check for existing in-cluster config: %v", err)
+		} else if existingCluster.ID == "" {
+			// Register in-cluster configuration
+			inClusterID := "in-cluster"
+			
+			// Use empty string to signal in-cluster config to k8s client
+			if err := k8sClient.AddInClusterConfig(inClusterID); err != nil {
+				log.Printf("Warning: Failed to add in-cluster configuration: %v", err)
 			} else {
-				log.Printf("Loaded cluster: %s", id)
+				// Check health before saving
+				status, healthErr := k8sClient.CheckClusterHealth(inClusterID)
+				if healthErr != nil {
+					log.Printf("Warning: In-cluster health check failed: %v", healthErr)
+					status = "unhealthy"
+				}
+				
+				// Save to database with empty kubeconfig (indicates in-cluster)
+				cluster := models.Cluster{
+					ID:          inClusterID,
+					Name:        inClusterName,
+					Description: inClusterDesc,
+					KubeConfig:  "",
+					Status:      status,
+				}
+				err = db.Create(&cluster).Error
+				
+				if err != nil {
+					log.Printf("Warning: Failed to save in-cluster configuration to database: %v", err)
+				} else {
+					log.Printf("Successfully registered in-cluster configuration as '%s'", inClusterName)
+				}
+			}
+		} else {
+			// In-cluster already exists, just ensure it's loaded
+			if err := k8sClient.AddInClusterConfig(existingCluster.ID); err != nil {
+				log.Printf("Warning: Failed to reload in-cluster configuration: %v", err)
+			} else {
+				log.Printf("In-cluster configuration already registered with ID: %s", existingCluster.ID)
 			}
 		}
 	}
 
-	// Create API server
-	apiServer := api.NewServer(db, k8sClient)
+	// Load existing clusters from database
+	var clusters []models.Cluster
+	if err := db.Where("kubeconfig != ?", "").Find(&clusters).Error; err != nil {
+		log.Printf("Warning: Failed to load existing clusters: %v", err)
+	} else {
+		for _, cluster := range clusters {
+			// Decrypt kubeconfig
+			kubeconfig, err := encryptor.Decrypt(cluster.KubeConfig)
+			if err != nil {
+				log.Printf("Warning: Failed to decrypt kubeconfig for cluster %s: %v", cluster.ID, err)
+				continue
+			}
 
-	// Start background sync worker
+			if err := k8sClient.AddCluster(cluster.ID, kubeconfig); err != nil {
+				log.Printf("Warning: Failed to add cluster %s: %v", cluster.ID, err)
+			} else {
+				log.Printf("Loaded cluster: %s", cluster.ID)
+			}
+		}
+	}
+
+	// Configure OAuth if enabled
+	var oauthProvider *auth.OAuthProvider
+	if getEnv("OAUTH_ENABLED", "false") == "true" {
+		oauthConfig := auth.Config{
+			Enabled:      true,
+			Provider:     getEnv("OAUTH_PROVIDER", "github"), // "github" or "entra"
+			ClientID:     getEnv("OAUTH_CLIENT_ID", ""),
+			ClientSecret: getEnv("OAUTH_CLIENT_SECRET", ""),
+			RedirectURL:  getEnv("OAUTH_REDIRECT_URL", "http://localhost:8080/api/v1/auth/callback"),
+			Scopes:       strings.Split(getEnv("OAUTH_SCOPES", ""), ","),
+		}
+
+		// Parse allowed users if specified
+		if allowedUsersStr := getEnv("OAUTH_ALLOWED_USERS", ""); allowedUsersStr != "" {
+			oauthConfig.AllowedUsers = strings.Split(allowedUsersStr, ",")
+		}
+
+		var err error
+		oauthProvider, err = auth.NewOAuthProvider(oauthConfig)
+		if err != nil {
+			log.Fatalf("Failed to initialize OAuth provider: %v", err)
+		}
+		log.Printf("OAuth enabled with provider: %s", oauthConfig.Provider)
+	} else {
+		log.Println("OAuth disabled - running in open mode")
+	}
+
+	// Create API server
+	apiServer := api.NewServer(db, k8sClient, encryptor, oauthProvider)
+
+	// Start background sync worker with dynamic interval
 	go syncWorker(db, k8sClient)
 
 	// Start HTTP server
@@ -79,32 +180,50 @@ func main() {
 
 // syncWorker periodically syncs resources from all clusters
 func syncWorker(db *database.DB, k8sClient *k8s.Client) {
-	ticker := time.NewTicker(5 * time.Minute)
+	// Start with default interval
+	interval := 5 * time.Minute
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		log.Println("Running periodic sync...")
+	// Channel for dynamic interval updates
+	updateInterval := make(chan time.Duration, 1)
 
-		rows, err := db.Query("SELECT id FROM clusters WHERE status = 'healthy'")
-		if err != nil {
-			log.Printf("Sync worker: Failed to query clusters: %v", err)
-			continue
+	// Goroutine to check for interval changes
+	go func() {
+		for {
+			time.Sleep(30 * time.Second) // Check every 30 seconds
+			var setting models.Setting
+			if err := db.Where("key = ?", "auto_sync_interval_minutes").First(&setting).Error; err == nil {
+				if minutes, err := strconv.Atoi(setting.Value); err == nil && minutes > 0 {
+					newInterval := time.Duration(minutes) * time.Minute
+					if newInterval != interval {
+						log.Printf("Auto-sync interval changed to %d minutes", minutes)
+						updateInterval <- newInterval
+					}
+				}
+			}
 		}
+	}()
 
-		var clusterIDs []string
-		for rows.Next() {
-			var id string
-			if err := rows.Scan(&id); err != nil {
+	for {
+		select {
+		case newInterval := <-updateInterval:
+			interval = newInterval
+			ticker.Reset(interval)
+		case <-ticker.C:
+			log.Println("Running periodic sync...")
+
+			var clusters []models.Cluster
+			if err := db.Where("status = ?", "healthy").Find(&clusters).Error; err != nil {
+				log.Printf("Sync worker: Failed to query clusters: %v", err)
 				continue
 			}
-			clusterIDs = append(clusterIDs, id)
-		}
-		rows.Close()
 
-		for _, clusterID := range clusterIDs {
+		for _, cluster := range clusters {
+			clusterID := cluster.ID
 			// Check cluster health
 			status, err := k8sClient.CheckClusterHealth(clusterID)
-			db.Exec("UPDATE clusters SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", status, clusterID)
+			db.Model(&models.Cluster{}).Where("id = ?", clusterID).Update("status", status)
 
 			if err != nil {
 				log.Printf("Sync worker: Cluster %s is unhealthy: %v", clusterID, err)
@@ -119,24 +238,14 @@ func syncWorker(db *database.DB, k8sClient *k8s.Client) {
 			}
 
 			for _, res := range resources {
-				_, err := db.Exec(`
-					INSERT INTO flux_resources (id, cluster_id, kind, name, namespace, status, message, last_reconcile, metadata, updated_at)
-					VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)
-					ON CONFLICT (cluster_id, kind, namespace, name)
-					DO UPDATE SET
-						status = EXCLUDED.status,
-						message = EXCLUDED.message,
-						last_reconcile = EXCLUDED.last_reconcile,
-						metadata = EXCLUDED.metadata,
-						updated_at = CURRENT_TIMESTAMP
-				`, res.ID, res.ClusterID, res.Kind, res.Name, res.Namespace, res.Status, res.Message, res.LastReconcile, res.Metadata)
-
-				if err != nil {
+				// Use GORM's Clauses for upsert
+				if err := db.Save(&res).Error; err != nil {
 					log.Printf("Sync worker: Failed to save resource %s: %v", res.ID, err)
 				}
 			}
 
 			log.Printf("Sync worker: Synced %d resources from cluster %s", len(resources), clusterID)
+		}
 		}
 	}
 }
