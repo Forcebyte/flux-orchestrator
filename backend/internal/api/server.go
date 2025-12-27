@@ -954,7 +954,7 @@ Value:    sessionToken,
 Path:     "/",
 MaxAge:   86400, // 24 hours
 HttpOnly: true,
-Secure:   false, // Set to true in production with HTTPS
+Secure:   true, // Ensure cookie is only sent over HTTPS
 SameSite: http.SameSiteLaxMode,
 })
 
