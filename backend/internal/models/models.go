@@ -37,7 +37,7 @@ type AzureSubscription struct {
 
 // Setting represents application settings
 type Setting struct {
-	Key       string    `json:"key" gorm:"primaryKey;size:100"`
+	Key       string    `json:"key" gorm:"primaryKey;size:100;column:setting_key"`
 	Value     string    `json:"value" gorm:"type:text;not null"`
 	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
