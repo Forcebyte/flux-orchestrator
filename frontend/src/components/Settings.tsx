@@ -9,6 +9,8 @@ const Settings: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [autoSyncInterval, setAutoSyncInterval] = useState<string>('5');
+  const [auditLogRetention, setAuditLogRetention] = useState<string>('90');
+  const [cleaningUp, setCleaningUp] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -24,6 +26,12 @@ const Settings: React.FC = () => {
       const autoSync = response.data.find(s => s.key === 'auto_sync_interval_minutes');
       if (autoSync) {
         setAutoSyncInterval(autoSync.value);
+      }
+
+      // Find audit log retention setting
+      const retention = response.data.find(s => s.key === 'audit_log_retention_days');
+      if (retention) {
+        setAuditLogRetention(retention.value);
       }
     } catch (err: any) {
       // If settings table doesn't exist yet, use defaults (will be created on first save)
@@ -56,6 +64,52 @@ const Settings: React.FC = () => {
       setError(err.response?.data?.error || 'Failed to update setting');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveRetention = async () => {
+    try {
+      setSaving(true);
+      setError(null);
+      
+      const days = parseInt(auditLogRetention);
+      if (isNaN(days) || days < 1) {
+        setError('Retention must be a positive number');
+        return;
+      }
+
+      await settingsApi.update('audit_log_retention_days', auditLogRetention);
+      await loadSettings();
+      alert('Audit log retention updated successfully!');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to update setting');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCleanupNow = async () => {
+    if (!confirm('This will delete audit logs older than ' + auditLogRetention + ' days. Continue?')) {
+      return;
+    }
+
+    try {
+      setCleaningUp(true);
+      setError(null);
+      const response = await fetch('/api/v1/activities/cleanup', {
+        method: 'POST',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Cleanup failed');
+      }
+
+      const data = await response.json();
+      alert(`Cleanup completed. ${data.remaining_activities} activities remaining.`);
+    } catch (err: any) {
+      setError('Failed to cleanup audit logs');
+    } finally {
+      setCleaningUp(false);
     }
   };
 
@@ -127,12 +181,57 @@ const Settings: React.FC = () => {
         </div>
 
             <div className="setting-section">
+              <h3>Audit Log Settings</h3>
+              <div className="setting-item">
+                <label htmlFor="audit-retention">
+                  <strong>Audit Log Retention (days)</strong>
+                  <p className="setting-description">
+                    Number of days to keep audit logs before automatic deletion. 
+                    Cleanup runs daily at midnight.
+                  </p>
+                </label>
+                <div className="setting-control">
+                  <input
+                    id="audit-retention"
+                    type="number"
+                    min="1"
+                    value={auditLogRetention}
+                    onChange={(e) => setAuditLogRetention(e.target.value)}
+                    disabled={saving}
+                  />
+                  <button
+                    onClick={handleSaveRetention}
+                    disabled={saving}
+                    className="btn-save"
+                  >
+                    {saving ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+                <p className="setting-hint">
+                  Current retention: {auditLogRetention} day(s)
+                </p>
+                <button
+                  onClick={handleCleanupNow}
+                  disabled={cleaningUp}
+                  className="btn-cleanup"
+                >
+                  {cleaningUp ? 'Cleaning...' : '🗑️ Cleanup Old Logs Now'}
+                </button>
+              </div>
+            </div>
+
+            <div className="setting-section">
               <h3>Information</h3>
               <div className="info-box">
                 <p>
                   <strong>About Auto-Sync:</strong> The system periodically syncs all Flux resources 
                   from healthy clusters to keep the database up to date. This includes Kustomizations, 
                   HelmReleases, GitRepositories, and other Flux resources.
+                </p>
+                <p>
+                  <strong>About Audit Logs:</strong> Activity logs track all operations performed in the system, 
+                  including cluster management, resource reconciliation, and configuration changes. 
+                  Old logs are automatically deleted based on the retention period to prevent database bloat.
                 </p>
               </div>
             </div>

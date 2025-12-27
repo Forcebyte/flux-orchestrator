@@ -151,6 +151,28 @@
   cursor: not-allowed;
 }
 
+.btn-cleanup {
+  margin-top: 15px;
+  padding: 10px 24px;
+  background: #ff5722;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-cleanup:hover:not(:disabled) {
+  background: #e64a19;
+}
+
+.btn-cleanup:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
 .setting-hint {
   color: #666;
   font-size: 0.9rem;
@@ -199,4 +221,54 @@
   .btn-save {
     width: 100%;
   }
+}
+
+/* Dark Mode Support */
+.dark-mode .settings-header h2 {
+  color: var(--text-primary);
+}
+
+.dark-mode .tab-button {
+  color: var(--text-secondary);
+}
+
+.dark-mode .tab-button:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.dark-mode .setting-section {
+  background: var(--bg-secondary);
+}
+
+.dark-mode .setting-section h3 {
+  color: var(--text-primary);
+}
+
+.dark-mode .setting-item label strong {
+  color: var(--text-primary);
+}
+
+.dark-mode .setting-description,
+.dark-mode .setting-hint {
+  color: var(--text-muted);
+}
+
+.dark-mode .setting-control input[type="number"] {
+  background: var(--bg-primary);
+  border-color: var(--input-border);
+  color: var(--text-primary);
+}
+
+.dark-mode .setting-control input[type="number"]:focus {
+  border-color: #4caf50;
+}
+
+.dark-mode .info-box {
+  background: #1e3a5f;
+  border-left-color: #2196f3;
+}
+
+.dark-mode .info-box p {
+  color: #90caf9;
 }

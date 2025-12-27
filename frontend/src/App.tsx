@@ -17,6 +17,9 @@ const Sidebar: React.FC = () => {
   return (
     <div className="sidebar">
       <div className="sidebar-header">
+        <div className="logo-container">
+          <img src="/flux-logo.png" alt="Flux Logo" className="sidebar-logo" />
+        </div>
         <h1>Flux Orchestrator</h1>
         <p>Multi-Cluster GitOps</p>
       </div>

@@ -802,6 +802,128 @@ func (c *Client) parseResourceNode(obj *unstructured.Unstructured, kind string) 
 				}
 				break
 			}
+			// For Deployments, also check Available condition
+			if kind == "Deployment" && condType == "Available" {
+				status = condStatus
+				if condStatus == "True" {
+					health = "Healthy"
+				} else {
+					health = "Degraded"
+				}
+			}
+		}
+	}
+
+	// Deployment-specific status
+	if kind == "Deployment" {
+		replicas, _, _ := unstructured.NestedInt64(obj.Object, "status", "replicas")
+		readyReplicas, _, _ := unstructured.NestedInt64(obj.Object, "status", "readyReplicas")
+		if replicas > 0 && readyReplicas == replicas {
+			status = "Ready"
+			health = "Healthy"
+		} else if readyReplicas > 0 {
+			status = "Progressing"
+			health = "Progressing"
+		} else {
+			status = "Not Ready"
+			health = "Degraded"
+		}
+	}
+
+	// StatefulSet-specific status
+	if kind == "StatefulSet" {
+		replicas, _, _ := unstructured.NestedInt64(obj.Object, "status", "replicas")
+		readyReplicas, _, _ := unstructured.NestedInt64(obj.Object, "status", "readyReplicas")
+		if replicas > 0 && readyReplicas == replicas {
+			status = "Ready"
+			health = "Healthy"
+		} else if readyReplicas > 0 {
+			status = "Progressing"
+			health = "Progressing"
+		} else {
+			status = "Not Ready"
+			health = "Degraded"
+		}
+	}
+
+	// DaemonSet-specific status
+	if kind == "DaemonSet" {
+		desiredScheduled, _, _ := unstructured.NestedInt64(obj.Object, "status", "desiredNumberScheduled")
+		numberReady, _, _ := unstructured.NestedInt64(obj.Object, "status", "numberReady")
+		if desiredScheduled > 0 && numberReady == desiredScheduled {
+			status = "Ready"
+			health = "Healthy"
+		} else if numberReady > 0 {
+			status = "Progressing"
+			health = "Progressing"
+		} else {
+			status = "Not Ready"
+			health = "Degraded"
+		}
+	}
+
+	// Service-specific status
+	if kind == "Service" {
+		serviceType, _, _ := unstructured.NestedString(obj.Object, "spec", "type")
+		status = fmt.Sprintf("Type: %s", serviceType)
+		health = "Healthy" // Services are generally healthy if they exist
+		
+		// Check for LoadBalancer ingress
+		if serviceType == "LoadBalancer" {
+			ingress, found, _ := unstructured.NestedSlice(obj.Object, "status", "loadBalancer", "ingress")
+			if found && len(ingress) > 0 {
+				status = "LoadBalancer Ready"
+			} else {
+				status = "LoadBalancer Pending"
+				health = "Progressing"
+			}
+		}
+	}
+
+	// Ingress-specific status
+	if kind == "Ingress" {
+		ingress, found, _ := unstructured.NestedSlice(obj.Object, "status", "loadBalancer", "ingress")
+		if found && len(ingress) > 0 {
+			status = "Ready"
+			health = "Healthy"
+		} else {
+			status = "Pending"
+			health = "Progressing"
+		}
+	}
+
+	// Job-specific status
+	if kind == "Job" {
+		succeeded, _, _ := unstructured.NestedInt64(obj.Object, "status", "succeeded")
+		failed, _, _ := unstructured.NestedInt64(obj.Object, "status", "failed")
+		if succeeded > 0 {
+			status = "Completed"
+			health = "Healthy"
+		} else if failed > 0 {
+			status = "Failed"
+			health = "Degraded"
+		} else {
+			status = "Running"
+			health = "Progressing"
+		}
+	}
+
+	// ConfigMap and Secret are healthy by default
+	if kind == "ConfigMap" || kind == "Secret" {
+		status = "Available"
+		health = "Healthy"
+	}
+
+	// Namespace status
+	if kind == "Namespace" {
+		phase, found, _ := unstructured.NestedString(obj.Object, "status", "phase")
+		if found {
+			status = phase
+			if phase == "Active" {
+				health = "Healthy"
+			} else {
+				health = "Degraded"
+			}
 		}
 	}
 

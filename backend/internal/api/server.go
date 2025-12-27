@@ -51,6 +51,9 @@ func NewServer(db *database.DB, k8sClient *k8s.Client, encryptor *encryption.Enc
 		go s.cleanupSessions()
 	}
 	
+	// Start audit log cleanup goroutine
+	go s.cleanupAuditLogs()
+	
 	// Load existing Azure subscriptions from database
 	s.loadAzureSubscriptions()
 	
@@ -119,6 +122,7 @@ func (s *Server) routes() {
 	// Activities (audit log)
 	api.HandleFunc("/activities", s.listActivities).Methods("GET", "OPTIONS")
 	api.HandleFunc("/activities/{id}", s.getActivity).Methods("GET", "OPTIONS")
+	api.HandleFunc("/activities/cleanup", s.cleanupAuditLogsNow).Methods("POST", "OPTIONS")
 
 	// Cluster operations
 	api.HandleFunc("/clusters/{id}/favorite", s.toggleFavorite).Methods("POST", "OPTIONS")
@@ -1502,4 +1506,56 @@ UserID:       "system", // TODO: Get from auth context
 if err := s.db.Create(&activity).Error; err != nil {
 log.Printf("Warning: Failed to log activity: %v", err)
 }
+}
+
+// cleanupAuditLogs runs periodically to clean up old audit logs based on retention setting
+func (s *Server) cleanupAuditLogs() {
+	ticker := time.NewTicker(24 * time.Hour) // Run once per day
+	defer ticker.Stop()
+
+	for range ticker.C {
+		s.performAuditLogCleanup()
+	}
+}
+
+// performAuditLogCleanup deletes audit logs older than the retention period
+func (s *Server) performAuditLogCleanup() {
+	// Get retention setting (default 90 days)
+	var setting models.Setting
+	err := s.db.Where("setting_key = ?", "audit_log_retention_days").First(&setting).Error
+	
+	retentionDays := 90 // Default
+	if err == nil && setting.Value != "" {
+		if days, err := strconv.Atoi(setting.Value); err == nil && days > 0 {
+			retentionDays = days
+		}
+	}
+
+	// Calculate cutoff date
+	cutoffDate := time.Now().AddDate(0, 0, -retentionDays)
+
+	// Delete old activities
+	result := s.db.Where("created_at < ?", cutoffDate).Delete(&models.Activity{})
+	if result.Error != nil {
+		log.Printf("Error cleaning up audit logs: %v", result.Error)
+		return
+	}
+
+	if result.RowsAffected > 0 {
+		log.Printf("Cleaned up %d audit log entries older than %d days", result.RowsAffected, retentionDays)
+	}
+}
+
+// cleanupAuditLogsNow manually triggers audit log cleanup
+func (s *Server) cleanupAuditLogsNow(w http.ResponseWriter, r *http.Request) {
+	s.performAuditLogCleanup()
+	
+	// Get count of remaining activities
+	var count int64
+	s.db.Model(&models.Activity{}).Count(&count)
+	
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "Audit log cleanup completed",
+		"remaining_activities": count,
+	})
 }

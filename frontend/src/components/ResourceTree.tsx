@@ -15,6 +15,8 @@ const ResourceTree: React.FC<ResourceTreeProps> = ({ clusterId }) => {
   const [error, setError] = useState<string | null>(null);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [logsView, setLogsView] = useState<{ namespace: string; podName: string } | null>(null);
+  const [showComputeOnly, setShowComputeOnly] = useState(false);
+  const [viewMode, setViewMode] = useState<'tree' | 'graph'>('tree');
 
   useEffect(() => {
     loadTree();
@@ -89,6 +91,7 @@ const ResourceTree: React.FC<ResourceTreeProps> = ({ clusterId }) => {
       Pod: '🔷',
       Service: '🔌',
       Ingress: '🌐',
+      IngressRoute: '🌐',
       ConfigMap: '⚙️',
       Secret: '🔒',
       Job: '⏱️',
@@ -97,6 +100,26 @@ const ResourceTree: React.FC<ResourceTreeProps> = ({ clusterId }) => {
     };
     return iconMap[kind] || '📄';
   };
+
+  const isComputeResource = (kind: string) => {
+    const computeKinds = ['Deployment', 'StatefulSet', 'DaemonSet', 'Pod', 'Job', 'CronJob', 'ReplicaSet'];
+    return computeKinds.includes(kind);
+  };
+
+  const filterTree = (nodes: ResourceNode[]): ResourceNode[] => {
+    if (!showComputeOnly) return nodes;
+    
+    return nodes.map(node => {
+      const filteredChildren = node.children ? filterTree(node.children) : [];
+      // Keep the node if it's compute resource or if it has compute children
+      if (isComputeResource(node.kind) || filteredChildren.length > 0) {
+        return { ...node, children: filteredChildren };
+      }
+      return null;
+    }).filter((node): node is ResourceNode => node !== null);
+  };
+
+  const filteredTree = filterTree(tree);
 
   const renderNode = (node: ResourceNode, level: number = 0): React.ReactNode => {
     const isExpanded = expandedNodes.has(node.id);
@@ -170,11 +193,72 @@ const ResourceTree: React.FC<ResourceTreeProps> = ({ clusterId }) => {
     return <div className="tree-empty">No resources found</div>;
   }
 
+  if (viewMode === 'graph') {
+    return (
+      <div className="resource-tree">
+        <div className="tree-header">
+          <h3>Resource Hierarchy</h3>
+          <div className="tree-actions">
+            <label className="toggle-switch">
+              <input 
+                type="checkbox" 
+                checked={showComputeOnly} 
+                onChange={(e) => setShowComputeOnly(e.target.checked)}
+              />
+              <span className="toggle-slider"></span>
+              <span className="toggle-label">Compute Resources Only</span>
+            </label>
+            <button 
+              onClick={() => setViewMode('tree')} 
+              className="btn-tree-action active"
+            >
+              🌳 Tree View
+            </button>
+            <button 
+              onClick={() => setViewMode('graph')} 
+              className="btn-tree-action"
+            >
+              📊 Graph View
+            </button>
+            <button onClick={loadTree} className="btn-tree-action">Refresh</button>
+          </div>
+        </div>
+        
+        <div className="graph-view">
+          <div className="graph-container">
+            {filteredTree.map(node => renderGraphNode(node, 0))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="resource-tree">
       <div className="tree-header">
         <h3>Resource Hierarchy</h3>
         <div className="tree-actions">
+          <label className="toggle-switch">
+            <input 
+              type="checkbox" 
+              checked={showComputeOnly} 
+              onChange={(e) => setShowComputeOnly(e.target.checked)}
+            />
+            <span className="toggle-slider"></span>
+            <span className="toggle-label">Compute Resources Only</span>
+          </label>
+          <button 
+            onClick={() => setViewMode('tree')} 
+            className="btn-tree-action"
+          >
+            🌳 Tree View
+          </button>
+          <button 
+            onClick={() => setViewMode('graph')} 
+            className="btn-tree-action"
+          >
+            📊 Graph View
+          </button>
           <button onClick={expandAll} className="btn-tree-action">Expand All</button>
           <button onClick={collapseAll} className="btn-tree-action">Collapse All</button>
           <button onClick={loadTree} className="btn-tree-action">Refresh</button>
@@ -182,11 +266,11 @@ const ResourceTree: React.FC<ResourceTreeProps> = ({ clusterId }) => {
       </div>
       
       <div className="tree-content">
-        {tree.map(node => renderNode(node))}
+        {filteredTree.map(node => renderNode(node))}
       </div>
       
       <div className="tree-footer">
-        <span className="tree-count">Total root resources: {tree.length}</span>
+        <span className="tree-count">Total root resources: {filteredTree.length}</span>
       </div>
 
       {logsView && (
@@ -199,6 +283,49 @@ const ResourceTree: React.FC<ResourceTreeProps> = ({ clusterId }) => {
       )}
     </div>
   );
+
+  function renderGraphNode(node: ResourceNode, level: number): React.ReactNode {
+    const hasChildren = node.children && node.children.length > 0;
+    const isExpanded = expandedNodes.has(node.id);
+
+    return (
+      <div key={node.id} className="graph-node-container" style={{ marginLeft: `${level * 40}px` }}>
+        <div className={`graph-node ${getHealthClass(node.health)}`}>
+          <div className="graph-node-header">
+            {hasChildren && (
+              <button
+                className="expand-button-graph"
+                onClick={() => toggleNode(node.id)}
+              >
+                {isExpanded ? '−' : '+'}
+              </button>
+            )}
+            <span className="graph-icon">{getKindIcon(node.kind)}</span>
+            <div className="graph-node-info">
+              <div className="graph-node-title">
+                <span className="node-kind-badge">{node.kind}</span>
+                <span className="node-name-text">{node.name}</span>
+              </div>
+              {node.namespace && <span className="node-namespace-text">{node.namespace}</span>}
+            </div>
+            <span className={`health-indicator ${node.health.toLowerCase()}`}>
+              {node.health === 'Healthy' ? '●' : node.health === 'Degraded' ? '●' : node.health === 'Progressing' ? '◐' : '○'}
+            </span>
+          </div>
+          
+          <div className="graph-node-status">
+            <span className="status-text">{node.status}</span>
+          </div>
+        </div>
+
+        {isExpanded && hasChildren && (
+          <div className="graph-children">
+            {node.children.map(child => renderGraphNode(child, level + 1))}
+          </div>
+        )}
+      </div>
+    );
+  }
 };
 
 export default ResourceTree;
