@@ -14,6 +14,7 @@ import (
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/models"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 // Server represents the API server
@@ -61,6 +62,14 @@ func (s *Server) routes() {
 
 	// Health check
 	s.router.HandleFunc("/health", s.health).Methods("GET")
+
+	// Swagger documentation
+	s.router.PathPrefix("/swagger/").Handler(httpSwagger.Handler(
+		httpSwagger.URL("/swagger/doc.json"),
+		httpSwagger.DeepLinking(true),
+		httpSwagger.DocExpansion("list"),
+		httpSwagger.DomID("swagger-ui"),
+	)).Methods("GET")
 
 	// Serve frontend static files (if built)
 	s.router.PathPrefix("/").Handler(http.FileServer(http.Dir("./frontend/build")))

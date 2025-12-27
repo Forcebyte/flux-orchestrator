@@ -1,0 +1,152 @@
+.logs-viewer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--overlay-bg);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.logs-viewer {
+  background: var(--logs-viewer-bg);
+  border-radius: 8px;
+  width: 90%;
+  height: 80%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.logs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--logs-border);
+}
+
+.logs-header h3 {
+  margin: 0;
+  color: var(--text-sidebar);
+  font-size: 18px;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  color: var(--text-sidebar);
+  font-size: 28px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.close-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.logs-controls {
+  display: flex;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--logs-border);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.control-group label {
+  color: var(--text-secondary);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.control-group select {
+  background: var(--logs-control-bg);
+  border: 1px solid var(--logs-control-border);
+  color: var(--text-sidebar);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.control-group select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.control-group input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.logs-controls button {
+  background: #0066cc;
+  color: #fff;
+  border: none;
+  padding: 6px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.logs-controls button:hover:not(:disabled) {
+  background: #0052a3;
+}
+
+.logs-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.logs-content {
+  flex: 1;
+  overflow: auto;
+  padding: 16px 20px;
+  background: var(--logs-bg);
+}
+
+.logs-content pre {
+  margin: 0;
+  color: var(--logs-text);
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.logs-loading {
+  color: #888;
+  text-align: center;
+  padding: 40px;
+  font-size: 14px;
+}
+
+.logs-error {
+  background: rgba(220, 38, 38, 0.1);
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  color: #fca5a5;
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
