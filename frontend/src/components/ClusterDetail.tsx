@@ -5,6 +5,7 @@ import { Cluster, FluxResource, FluxStats, FluxResourceChild } from '../types';
 import { useToast } from '../hooks/useToast';
 import Toast from './Toast';
 import ResourceTree from './ResourceTree';
+import FluxResourceEditDialog from './FluxResourceEditDialog';
 import '../styles/ClusterDetail.css';
 
 const ClusterDetail: React.FC = () => {
@@ -19,6 +20,7 @@ const ClusterDetail: React.FC = () => {
   const [loadingChildren, setLoadingChildren] = useState<Set<string>>(new Set());
   const [isReconciling, setIsReconciling] = useState<Set<string>>(new Set());
   const [isSuspending, setIsSuspending] = useState<Set<string>>(new Set());
+  const [editingResource, setEditingResource] = useState<FluxResource | null>(null);
   const { toasts, removeToast, success, error, info } = useToast();
 
   useEffect(() => {
@@ -124,6 +126,28 @@ const ClusterDetail: React.FC = () => {
     }
   };
 
+  const handleEdit = (resource: FluxResource) => {
+    setEditingResource(resource);
+  };
+
+  const handleSaveEdit = async (patch: any) => {
+    if (!editingResource) return;
+
+    try {
+      await fluxApi.updateResource(
+        editingResource.cluster_id,
+        editingResource.kind,
+        editingResource.namespace,
+        editingResource.name,
+        patch
+      );
+      success(`${editingResource.name} updated successfully`);
+      setTimeout(loadData, 2000);
+    } catch (err: any) {
+      throw err; // Let the dialog handle the error
+    }
+  };
+
   const handleSync = async () => {
     if (!id) return;
     try {
@@ -207,6 +231,14 @@ const ClusterDetail: React.FC = () => {
   return (
     <div>
       <Toast toasts={toasts} removeToast={removeToast} />
+      
+      {editingResource && (
+        <FluxResourceEditDialog
+          resource={editingResource}
+          onClose={() => setEditingResource(null)}
+          onSave={handleSaveEdit}
+        />
+      )}
 
       <div className="header">
         <div className="header-content">
@@ -413,6 +445,12 @@ const ClusterDetail: React.FC = () => {
                                   </div>
                                 </div>
                                 <div className="resource-actions" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    className="btn btn-sm btn-secondary"
+                                    onClick={() => handleEdit(resource)}
+                                  >
+                                    ✏️ Edit
+                                  </button>
                                   {suspended ? (
                                     <button
                                       className={`btn btn-sm btn-success ${isSuspendingNow ? 'btn-loading' : ''}`}

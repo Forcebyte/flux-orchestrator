@@ -58,6 +58,7 @@ func (s *Server) routes() {
 	api.HandleFunc("/clusters/{id}/resources/tree", s.getResourceTree).Methods("GET", "OPTIONS")
 	api.HandleFunc("/clusters/{id}/flux/stats", s.getFluxStats).Methods("GET", "OPTIONS")
 	api.HandleFunc("/clusters/{id}/flux/{kind}/{namespace}/{name}", s.getFluxResource).Methods("GET", "OPTIONS")
+	api.HandleFunc("/clusters/{id}/flux/{kind}/{namespace}/{name}", s.updateFluxResource).Methods("PUT", "OPTIONS")
 	api.HandleFunc("/clusters/{id}/flux/{kind}/{namespace}/{name}/reconcile", s.reconcileFluxResource).Methods("POST", "OPTIONS")
 	api.HandleFunc("/clusters/{id}/flux/{kind}/{namespace}/{name}/suspend", s.suspendFluxResource).Methods("POST", "OPTIONS")
 	api.HandleFunc("/clusters/{id}/flux/{kind}/{namespace}/{name}/resume", s.resumeFluxResource).Methods("POST", "OPTIONS")
@@ -612,5 +613,30 @@ func (s *Server) getResourceTree(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"tree":  tree,
 		"count": len(tree),
+	})
+}
+
+// updateFluxResource updates a Flux resource configuration
+func (s *Server) updateFluxResource(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	clusterID := vars["id"]
+	kind := vars["kind"]
+	namespace := vars["namespace"]
+	name := vars["name"]
+
+	var patch map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	ctx := r.Context()
+	if err := s.k8sClient.UpdateFluxResource(ctx, clusterID, kind, namespace, name, patch); err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to update resource: %v", err))
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{
+		"message": "Resource updated successfully",
 	})
 }

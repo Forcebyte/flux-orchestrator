@@ -31,6 +31,8 @@ export const fluxApi = {
   getStats: (clusterId: string) => api.get<FluxStats>(`/clusters/${clusterId}/flux/stats`),
   getResource: (clusterId: string, kind: string, namespace: string, name: string) =>
     api.get<FluxResource>(`/clusters/${clusterId}/flux/${kind}/${namespace}/${name}`),
+  updateResource: (clusterId: string, kind: string, namespace: string, name: string, patch: any) =>
+    api.put(`/clusters/${clusterId}/flux/${kind}/${namespace}/${name}`, patch),
   reconcile: (clusterId: string, kind: string, namespace: string, name: string) =>
     api.post(`/clusters/${clusterId}/flux/${kind}/${namespace}/${name}/reconcile`),
   suspend: (clusterId: string, kind: string, namespace: string, name: string) =>

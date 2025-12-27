@@ -321,6 +321,53 @@ func (c *Client) setSuspended(ctx context.Context, clusterID, kind, namespace, n
 	return nil
 }
 
+// UpdateFluxResource updates spec fields of a Flux resource
+func (c *Client) UpdateFluxResource(ctx context.Context, clusterID, kind, namespace, name string, patch map[string]interface{}) error {
+	client, err := c.GetClient(clusterID)
+	if err != nil {
+		return err
+	}
+
+	gvr, err := c.getGVRForKind(kind)
+	if err != nil {
+		return err
+	}
+
+	// Get the resource
+	resource, err := client.Resource(gvr).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get resource: %w", err)
+	}
+
+	// Apply patch to spec
+	if specPatch, ok := patch["spec"].(map[string]interface{}); ok {
+		currentSpec, found, err := unstructured.NestedMap(resource.Object, "spec")
+		if err != nil {
+			return fmt.Errorf("failed to get spec: %w", err)
+		}
+		if !found {
+			currentSpec = make(map[string]interface{})
+		}
+
+		// Merge patch into current spec
+		for key, value := range specPatch {
+			currentSpec[key] = value
+		}
+
+		if err := unstructured.SetNestedMap(resource.Object, currentSpec, "spec"); err != nil {
+			return fmt.Errorf("failed to set spec: %w", err)
+		}
+	}
+
+	// Update the resource
+	_, err = client.Resource(gvr).Namespace(namespace).Update(ctx, resource, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update resource: %w", err)
+	}
+
+	return nil
+}
+
 // GetResourcesCreatedByFlux gets all resources created by a specific Flux resource
 func (c *Client) GetResourcesCreatedByFlux(ctx context.Context, clusterID, kind, namespace, name string) ([]map[string]interface{}, error) {
 	client, err := c.GetClient(clusterID)
