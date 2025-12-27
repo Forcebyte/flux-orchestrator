@@ -197,12 +197,12 @@ const KustomizationDetail: React.FC<KustomizationDetailProps> = ({
                               <ResourceActionMenu
                                 clusterId={clusterId}
                                 kind={res.Kind}
-                                namespace={res.Namespace || ''}
+                                namespace={res.Namespace}
                                 name={res.Name}
                                 onLogsClick={() => 
                                   setLogsView({ 
-                                    namespace: res.Namespace || '', 
-                                    podName: res.Name 
+                                    namespace: res.Namespace!, 
+                                    podName: res.Name! 
                                   })
                                 }
                                 onActionComplete={loadResources}
