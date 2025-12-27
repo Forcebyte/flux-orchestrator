@@ -459,3 +459,4 @@ MIT License - see LICENSE file for details
 
 - Inspired by [ArgoCD](https://argoproj.github.io/cd/)
 - Built for [Flux CD](https://fluxcd.io/)
+
