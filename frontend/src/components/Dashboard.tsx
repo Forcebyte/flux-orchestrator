@@ -1,23 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { resourceApi } from '../api';
-import { FluxResource } from '../types';
+import { resourceApi, clusterApi } from '../api';
+import { FluxResource, Cluster } from '../types';
+import '../styles/Dashboard.css';
 
 const Dashboard: React.FC = () => {
   const [resources, setResources] = useState<FluxResource[]>([]);
+  const [clusters, setClusters] = useState<Cluster[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadResources();
-    const interval = setInterval(loadResources, 30000); // Refresh every 30s
+    loadData();
+    const interval = setInterval(loadData, 30000); // Refresh every 30s
     return () => clearInterval(interval);
   }, []);
 
-  const loadResources = async () => {
+  const loadData = async () => {
     try {
-      const response = await resourceApi.listAll();
-      setResources(response.data);
+      const [resourcesRes, clustersRes] = await Promise.all([
+        resourceApi.listAll(),
+        clusterApi.list(),
+      ]);
+      setResources(resourcesRes.data);
+      setClusters(clustersRes.data);
     } catch (error) {
-      console.error('Failed to load resources:', error);
+      console.error('Failed to load data:', error);
     } finally {
       setLoading(false);
     }
@@ -31,89 +37,233 @@ const Dashboard: React.FC = () => {
     return acc;
   }, {} as Record<string, FluxResource[]>);
 
+  const groupedByKind = resources.reduce((acc, r) => {
+    if (!acc[r.kind]) {
+      acc[r.kind] = [];
+    }
+    acc[r.kind].push(r);
+    return acc;
+  }, {} as Record<string, FluxResource[]>);
+
   const stats = {
     total: resources.length,
     ready: resources.filter(r => r.status === 'Ready').length,
     notReady: resources.filter(r => r.status === 'NotReady').length,
     unknown: resources.filter(r => r.status === 'Unknown').length,
+    suspended: resources.filter(r => r.suspend).length,
   };
 
+  const healthPercentage = stats.total > 0 
+    ? Math.round((stats.ready / stats.total) * 100) 
+    : 0;
+
   if (loading) {
-    return <div className="loading">Loading dashboard...</div>;
+    return <div className="dashboard-loading">Loading dashboard...</div>;
   }
 
   return (
-    <div>
-      <div className="header">
-        <h2>Dashboard</h2>
-        <p style={{ color: '#718096', marginTop: '5px' }}>
-          Overview of all Flux resources across clusters
-        </p>
+    <div className="dashboard">
+      <div className="dashboard-header">
+        <div>
+          <h2>Dashboard</h2>
+          <p>Overview of all Flux resources across clusters</p>
+        </div>
+        <button className="refresh-btn" onClick={loadData}>
+          🔄 Refresh
+        </button>
       </div>
 
-      <div className="content">
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-          <div className="card">
-            <h3 style={{ fontSize: '16px', color: '#718096' }}>Total Resources</h3>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#2d3748', marginTop: '10px' }}>
-              {stats.total}
-            </div>
-          </div>
-          <div className="card">
-            <h3 style={{ fontSize: '16px', color: '#718096' }}>Ready</h3>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#48bb78', marginTop: '10px' }}>
-              {stats.ready}
-            </div>
-          </div>
-          <div className="card">
-            <h3 style={{ fontSize: '16px', color: '#718096' }}>Not Ready</h3>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#f56565', marginTop: '10px' }}>
-              {stats.notReady}
-            </div>
-          </div>
-          <div className="card">
-            <h3 style={{ fontSize: '16px', color: '#718096' }}>Unknown</h3>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#cbd5e0', marginTop: '10px' }}>
-              {stats.unknown}
-            </div>
+      {/* Top Stats Cards */}
+      <div className="stats-grid">
+        <div className="stat-card total">
+          <div className="stat-icon">📦</div>
+          <div className="stat-content">
+            <h3>Total Resources</h3>
+            <div className="stat-value">{stats.total}</div>
+            <div className="stat-trend">Across {clusters.length} cluster{clusters.length !== 1 ? 's' : ''}</div>
           </div>
         </div>
 
-        {Object.entries(groupedByCluster).map(([clusterId, clusterResources]) => (
-          <div key={clusterId} className="card">
-            <h3>Cluster: {clusterId}</h3>
-            <div className="grid">
-              {clusterResources.map((resource) => (
-                <div key={resource.id} className="resource-card">
-                  <h4>{resource.name}</h4>
-                  <div className="resource-info">
-                    <span className="resource-meta">
-                      {resource.kind} • {resource.namespace}
-                    </span>
-                    <span className={`status-badge status-${resource.status.toLowerCase()}`}>
-                      {resource.status}
-                    </span>
-                  </div>
-                  {resource.message && (
-                    <div style={{ fontSize: '12px', color: '#718096', marginTop: '8px' }}>
-                      {resource.message}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+        <div className="stat-card ready">
+          <div className="stat-icon">✅</div>
+          <div className="stat-content">
+            <h3>Ready</h3>
+            <div className="stat-value">{stats.ready}</div>
+            <div className="stat-trend">{healthPercentage}% healthy</div>
           </div>
-        ))}
+        </div>
 
-        {resources.length === 0 && (
-          <div className="empty-state">
-            <h3>No Resources Found</h3>
-            <p>Add a cluster and sync to see Flux resources</p>
+        <div className="stat-card notready">
+          <div className="stat-icon">⚠️</div>
+          <div className="stat-content">
+            <h3>Not Ready</h3>
+            <div className="stat-value">{stats.notReady}</div>
+            <div className="stat-trend">Requires attention</div>
           </div>
-        )}
+        </div>
+
+        <div className="stat-card suspended">
+          <div className="stat-icon">⏸️</div>
+          <div className="stat-content">
+            <h3>Suspended</h3>
+            <div className="stat-value">{stats.suspended}</div>
+            <div className="stat-trend">Paused reconciliation</div>
+          </div>
+        </div>
       </div>
+
+      {/* Health Bar */}
+      <div className="health-overview">
+        <h3>Overall Health</h3>
+        <div className="health-bar">
+          <div 
+            className="health-segment ready" 
+            style={{ width: `${(stats.ready / stats.total) * 100}%` }}
+            title={`Ready: ${stats.ready}`}
+          />
+          <div 
+            className="health-segment notready" 
+            style={{ width: `${(stats.notReady / stats.total) * 100}%` }}
+            title={`Not Ready: ${stats.notReady}`}
+          />
+          <div 
+            className="health-segment unknown" 
+            style={{ width: `${(stats.unknown / stats.total) * 100}%` }}
+            title={`Unknown: ${stats.unknown}`}
+          />
+        </div>
+        <div className="health-legend">
+          <span><span className="legend-dot ready"></span> Ready ({stats.ready})</span>
+          <span><span className="legend-dot notready"></span> Not Ready ({stats.notReady})</span>
+          <span><span className="legend-dot unknown"></span> Unknown ({stats.unknown})</span>
+        </div>
+      </div>
+
+      <div className="dashboard-grid">
+        {/* Resources by Kind */}
+        <div className="dashboard-card">
+          <h3>Resources by Type</h3>
+          <div className="kind-list">
+            {Object.entries(groupedByKind)
+              .sort((a, b) => b[1].length - a[1].length)
+              .map(([kind, items]) => {
+                const kindStats = {
+                  ready: items.filter(r => r.status === 'Ready').length,
+                  total: items.length,
+                };
+                return (
+                  <div key={kind} className="kind-item">
+                    <div className="kind-info">
+                      <span className="kind-icon">{getKindIcon(kind)}</span>
+                      <span className="kind-name">{kind}</span>
+                    </div>
+                    <div className="kind-stats">
+                      <span className="kind-count">{items.length}</span>
+                      <div className="mini-health-bar">
+                        <div 
+                          className="mini-health-fill" 
+                          style={{ width: `${(kindStats.ready / kindStats.total) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+
+        {/* Cluster Overview */}
+        <div className="dashboard-card">
+          <h3>Clusters</h3>
+          <div className="cluster-list">
+            {clusters.map(cluster => {
+              const clusterResources = groupedByCluster[cluster.id] || [];
+              const clusterStats = {
+                ready: clusterResources.filter(r => r.status === 'Ready').length,
+                total: clusterResources.length,
+              };
+              return (
+                <div key={cluster.id} className="cluster-item">
+                  <div className="cluster-header">
+                    <div>
+                      <div className="cluster-name">🖥️ {cluster.name}</div>
+                      <div className="cluster-desc">{cluster.description || 'No description'}</div>
+                    </div>
+                    <div className={`cluster-status ${cluster.status}`}>
+                      {cluster.status}
+                    </div>
+                  </div>
+                  <div className="cluster-stats">
+                    <div className="cluster-stat">
+                      <span className="stat-label">Resources</span>
+                      <span className="stat-number">{clusterStats.total}</span>
+                    </div>
+                    <div className="cluster-stat">
+                      <span className="stat-label">Ready</span>
+                      <span className="stat-number ready">{clusterStats.ready}</span>
+                    </div>
+                    <div className="cluster-stat">
+                      <span className="stat-label">Health</span>
+                      <span className="stat-number">
+                        {clusterStats.total > 0 
+                          ? Math.round((clusterStats.ready / clusterStats.total) * 100) 
+                          : 0}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Resources */}
+      <div className="dashboard-card">
+        <h3>Recent Resources</h3>
+        <div className="recent-resources">
+          {resources
+            .sort((a, b) => new Date(b.last_updated).getTime() - new Date(a.last_updated).getTime())
+            .slice(0, 10)
+            .map(resource => (
+              <div key={resource.id} className="resource-row">
+                <span className="resource-icon">{getKindIcon(resource.kind)}</span>
+                <div className="resource-details">
+                  <div className="resource-name">{resource.name}</div>
+                  <div className="resource-meta">
+                    {resource.kind} • {resource.namespace || 'cluster-scoped'}
+                  </div>
+                </div>
+                <span className={`status-badge status-${resource.status.toLowerCase()}`}>
+                  {resource.status}
+                </span>
+                {resource.suspend && <span className="suspend-badge">Suspended</span>}
+              </div>
+            ))}
+        </div>
+      </div>
+
+      {resources.length === 0 && (
+        <div className="empty-state">
+          <div className="empty-icon">📭</div>
+          <h3>No Resources Found</h3>
+          <p>Add a cluster and sync to see Flux resources</p>
+        </div>
+      )}
     </div>
   );
 };
+
+function getKindIcon(kind: string): string {
+  const iconMap: Record<string, string> = {
+    Kustomization: '📦',
+    HelmRelease: '⎈',
+    GitRepository: '📚',
+    HelmRepository: '📊',
+    OCIRepository: '🗂️',
+    Bucket: '🪣',
+  };
+  return iconMap[kind] || '📄';
+}
 
 export default Dashboard;
