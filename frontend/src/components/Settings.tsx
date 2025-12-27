@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Setting } from '../types';
 import { settingsApi } from '../api';
 import '../styles/Settings.css';
 
