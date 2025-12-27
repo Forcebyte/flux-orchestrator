@@ -9,11 +9,15 @@
   --bg-secondary: #ffffff;
   --bg-sidebar: #2d3748;
   --bg-sidebar-header: #1a202c;
+  --bg-hover: #f7fafc;
+  --bg-table-header: #f7fafc;
   --text-primary: #333;
   --text-secondary: #666;
+  --text-muted: #718096;
   --text-sidebar: #ffffff;
-  --border-color: #ddd;
+  --border-color: #e2e8f0;
   --card-shadow: rgba(0, 0, 0, 0.1);
+  --input-border: #cbd5e0;
 }
 
 .dark-mode {
@@ -21,11 +25,15 @@
   --bg-secondary: #2d3748;
   --bg-sidebar: #1a202c;
   --bg-sidebar-header: #0d1117;
+  --bg-hover: #374151;
+  --bg-table-header: #374151;
   --text-primary: #e2e8f0;
   --text-secondary: #cbd5e0;
+  --text-muted: #9ca3af;
   --text-sidebar: #cbd5e0;
   --border-color: #4a5568;
   --card-shadow: rgba(0, 0, 0, 0.3);
+  --input-border: #4a5568;
 }
 
 body {
@@ -56,7 +64,7 @@ code {
 
 .sidebar {
   width: 240px;
-  background: #2d3748;
+  background: var(--bg-sidebar);
   color: white;
   display: flex;
   flex-direction: column;
@@ -64,8 +72,8 @@ code {
 
 .sidebar-header {
   padding: 20px;
-  background: #1a202c;
-  border-bottom: 1px solid #4a5568;
+  background: var(--bg-sidebar-header);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .sidebar-header h1 {
@@ -106,19 +114,19 @@ code {
 .main-content {
   flex: 1;
   overflow-y: auto;
-  background: #f5f7fa;
+  background: var(--bg-primary);
 }
 
 .header {
-  background: white;
+  background: var(--bg-secondary);
   padding: 20px 30px;
-  border-bottom: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: 0 1px 3px var(--card-shadow);
 }
 
 .header h2 {
   font-size: 24px;
-  color: #2d3748;
+  color: var(--text-primary);
   margin-bottom: 5px;
 }
 
@@ -133,16 +141,16 @@ code {
 }
 
 .card {
-  background: white;
+  background: var(--bg-secondary);
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px var(--card-shadow);
 }
 
 .card h3 {
   font-size: 18px;
-  color: #2d3748;
+  color: var(--text-primary);
   margin-bottom: 15px;
 }
 
@@ -166,8 +174,8 @@ code {
 }
 
 .btn-secondary {
-  background: #e2e8f0;
-  color: #2d3748;
+  background: var(--border-color);
+  color: var(--text-primary);
 }
 
 .btn-secondary:hover {
@@ -260,8 +268,8 @@ code {
 }
 
 .status-unknown {
-  background: #e2e8f0;
-  color: #2d3748;
+  background: var(--border-color);
+  color: var(--text-primary);
 }
 
 .status-healthy {
@@ -282,27 +290,27 @@ code {
 .table th {
   text-align: left;
   padding: 12px;
-  background: #f7fafc;
-  color: #4a5568;
+  background: var(--bg-table-header);
+  color: var(--text-secondary);
   font-weight: 600;
   font-size: 12px;
   text-transform: uppercase;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid var(--border-color);
 }
 
 .table td {
   padding: 12px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .table tbody tr:hover {
-  background: #f7fafc;
+  background: var(--bg-hover);
 }
 
 .empty-state {
   text-align: center;
   padding: 60px 20px;
-  color: #718096;
+  color: var(--text-muted);
 }
 
 .empty-state h3 {
@@ -318,7 +326,7 @@ code {
 .loading {
   text-align: center;
   padding: 40px;
-  color: #718096;
+  color: var(--text-muted);
 }
 
 .form-group {
@@ -329,16 +337,18 @@ code {
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
-  color: #2d3748;
+  color: var(--text-primary);
   font-size: 14px;
 }
 
 .form-control {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #cbd5e0;
+  border: 1px solid var(--input-border);
   border-radius: 6px;
   font-size: 14px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .form-control:focus {
@@ -365,7 +375,7 @@ textarea.form-control {
 }
 
 .modal {
-  background: white;
+  background: var(--bg-secondary);
   border-radius: 8px;
   padding: 30px;
   max-width: 600px;
@@ -377,7 +387,7 @@ textarea.form-control {
 .modal h3 {
   font-size: 20px;
   margin-bottom: 20px;
-  color: #2d3748;
+  color: var(--text-primary);
 }
 
 .modal-actions {
@@ -394,42 +404,42 @@ textarea.form-control {
 }
 
 .cluster-card {
-  background: white;
+  background: var(--bg-secondary);
   border-radius: 8px;
   padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px var(--card-shadow);
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .cluster-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 8px var(--card-shadow);
 }
 
 .cluster-card h4 {
   font-size: 18px;
-  color: #2d3748;
+  color: var(--text-primary);
   margin-bottom: 10px;
 }
 
 .cluster-card p {
   font-size: 14px;
-  color: #718096;
+  color: var(--text-muted);
   margin-bottom: 15px;
 }
 
 .resource-card {
-  background: white;
+  background: var(--bg-secondary);
   border-radius: 8px;
   padding: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px var(--card-shadow);
   border-left: 4px solid #4299e1;
 }
 
 .resource-card h4 {
   font-size: 16px;
-  color: #2d3748;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
 
@@ -442,12 +452,12 @@ textarea.form-control {
 
 .resource-card .resource-meta {
   font-size: 12px;
-  color: #718096;
+  color: var(--text-muted);
 }
 
 .tabs {
   display: flex;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border-color);
   margin-bottom: 20px;
 }
 
@@ -455,7 +465,7 @@ textarea.form-control {
   padding: 12px 20px;
   background: none;
   border: none;
-  color: #718096;
+  color: var(--text-muted);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
