@@ -247,9 +247,9 @@
 }
 
 .resource-item {
-  background: white;
+  background: var(--bg-secondary);
   border-radius: 6px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   overflow: hidden;
   transition: box-shadow 0.2s;
 }
@@ -269,6 +269,7 @@
   align-items: center;
   cursor: pointer;
   user-select: none;
+  background: var(--bg-secondary);
 }
 
 .resource-item-main {
@@ -280,7 +281,7 @@
 }
 
 .expand-icon {
-  color: #a0aec0;
+  color: var(--text-muted);
   font-size: 12px;
   flex-shrink: 0;
   width: 16px;
@@ -350,8 +351,8 @@
 /* Resource Details */
 .resource-item-details {
   padding: 16px;
-  background: #f7fafc;
-  border-top: 1px solid #e2e8f0;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-color);
   animation: slideDown 0.2s ease-out;
 }
 
@@ -392,16 +393,16 @@
 
 .detail-value.code {
   font-family: 'Courier New', monospace;
-  background: white;
+  background: var(--bg-secondary);
   padding: 8px 12px;
   border-radius: 4px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   font-size: 12px;
   overflow-x: auto;
 }
 
 .message-box {
-  background: white;
+  background: var(--bg-secondary);
   padding: 12px;
   border-radius: 4px;
   border-left: 3px solid #4299e1;
@@ -417,10 +418,10 @@
 }
 
 .metadata-box {
-  background: white;
+  background: var(--bg-secondary);
   padding: 12px;
   border-radius: 4px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   font-family: 'Courier New', monospace;
   font-size: 11px;
   overflow-x: auto;
@@ -460,7 +461,7 @@
 .stats-title {
   font-size: 18px;
   font-weight: 600;
-  color: #2d3748;
+  color: var(--text-primary);
   margin-bottom: 16px;
 }
 
@@ -564,10 +565,10 @@
 
 /* Children List */
 .children-list {
-  background: white;
+  background: var(--bg-secondary);
   padding: 12px;
   border-radius: 4px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
 }
 
 .children-count {
@@ -588,7 +589,7 @@
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  background: #f7fafc;
+  background: var(--bg-tertiary);
   border-radius: 4px;
   margin-bottom: 4px;
   font-size: 12px;
@@ -615,8 +616,8 @@
 .child-version {
   flex-shrink: 0;
   padding: 2px 6px;
-  background: #e2e8f0;
-  color: #4a5568;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
   border-radius: 4px;
   font-size: 10px;
   font-weight: 600;
