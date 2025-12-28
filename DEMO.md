@@ -19,6 +19,11 @@ The demo includes:
 - Resource tree visualization
 - Settings management
 
+## Try it out
+
+[🚀 View Live Demo](https://flux-orchestrator-demo.vercel.app)
+
+
 ## Quick Deploy to Vercel
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/forcebyte/flux-orchestrator&env=VITE_DEMO_MODE&envDescription=Demo%20mode%20configuration&envLink=https://github.com/forcebyte/flux-orchestrator/blob/main/DEMO.md&project-name=flux-orchestrator-demo&repository-name=flux-orchestrator-demo)
