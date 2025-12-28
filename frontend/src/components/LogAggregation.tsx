@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { clusterApi } from '../api';
+import { clusterApi, logsApi } from '../api';
 import '../styles/LogAggregation.css';
 
 interface LogEntry {
@@ -97,13 +97,8 @@ const LogAggregation: React.FC = () => {
       if (labelSelector) params.append('label_selector', labelSelector);
       params.append('tail_lines', tailLines.toString());
       
-      const response = await fetch(`/api/v1/logs/aggregated?${params.toString()}`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to load logs');
-      }
-      
-      const data = await response.json();
+      const response = await logsApi.getAggregatedLogs(params);
+      const data = response.data;
       
       if (!data.logs || !Array.isArray(data.logs)) {
         setLogs([]);

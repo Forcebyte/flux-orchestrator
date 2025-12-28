@@ -284,3 +284,74 @@ export const mockSettings = [
   { key: 'auto_sync_interval_minutes', value: '5', updated_at: '2024-12-27T10:00:00Z' },
   { key: 'audit_log_retention_days', value: '90', updated_at: '2024-12-27T10:00:00Z' },
 ];
+// Generate mock log entries
+const generateMockLogs = () => {
+  const clusters = ['demo-cluster-1', 'demo-cluster-2', 'demo-cluster-3'];
+  const clusterNames = ['Production Cluster', 'Staging Environment', 'Development Cluster'];
+  const namespaces = ['flux-system', 'default', 'kube-system', 'monitoring'];
+  const pods = [
+    'source-controller-7d6c9d4f8-abc12',
+    'kustomize-controller-5b9d8f6c7-def34',
+    'helm-controller-6c8e9d7f5-ghi56',
+    'notification-controller-8d7f6e5c4-jkl78',
+    'image-reflector-controller-9e8f7d6c5-mno90',
+    'image-automation-controller-7f6e5d4c3-pqr12',
+  ];
+  const containers = ['manager', 'sidecar', 'init'];
+  
+  const logMessages = [
+    'INFO: Successfully reconciled resource',
+    'INFO: Fetching artifact from source',
+    'INFO: Applied kustomization successfully',
+    'WARN: Rate limit approaching for git provider',
+    'INFO: Health check passed for all resources',
+    'DEBUG: Processing reconciliation request',
+    'ERROR: Failed to fetch artifact: connection timeout',
+    'INFO: Resource synchronized with cluster',
+    'WARN: Deprecated API version detected in manifest',
+    'INFO: Helm release deployed successfully',
+    'DEBUG: Validating resource specifications',
+    'INFO: Git repository synced at revision main/abc123def',
+    'ERROR: Validation failed: spec.replicas is required',
+    'INFO: ConfigMap updated, triggering rollout',
+    'WARN: Image pull backoff detected on pod xyz',
+    'INFO: Secret reconciliation completed',
+    'DEBUG: Checking for resource drift',
+    'INFO: Notification sent to webhook endpoint',
+    'ERROR: Kustomization build failed: invalid YAML syntax',
+    'INFO: Resource status updated to Ready',
+    'WARN: Memory usage above 80% threshold',
+    'INFO: Scanning for new container images',
+    'DEBUG: Filtering resources by namespace',
+    'INFO: OCIRepository artifact downloaded',
+    'ERROR: HelmRelease installation failed: chart not found',
+    'INFO: Pruning deleted resources from cluster',
+    'WARN: SSL certificate expires in 30 days',
+    'INFO: Image automation policy applied',
+    'DEBUG: Calculating resource dependencies',
+    'INFO: Flux CD version: v2.2.0',
+  ];
+
+  const logs = [];
+  const now = new Date();
+  
+  for (let i = 0; i < 100; i++) {
+    const clusterIdx = Math.floor(Math.random() * clusters.length);
+    const timestamp = new Date(now.getTime() - Math.random() * 3600000); // Last hour
+    
+    logs.push({
+      timestamp: timestamp.toISOString(),
+      cluster_id: clusters[clusterIdx],
+      cluster_name: clusterNames[clusterIdx],
+      namespace: namespaces[Math.floor(Math.random() * namespaces.length)],
+      pod_name: pods[Math.floor(Math.random() * pods.length)],
+      container: containers[Math.floor(Math.random() * containers.length)],
+      message: logMessages[Math.floor(Math.random() * logMessages.length)],
+    });
+  }
+  
+  // Sort by timestamp descending
+  return logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+};
+
+export const mockLogs = generateMockLogs();

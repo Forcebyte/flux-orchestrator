@@ -6,7 +6,8 @@ import {
   mockFluxStats, 
   mockAzureSubscriptions, 
   mockOAuthProviders,
-  mockSettings 
+  mockSettings,
+  mockLogs 
 } from './mockData';
 import type { Cluster, ResourceNode } from './types';
 
@@ -211,4 +212,35 @@ export const demoOAuthApi = {
 export const demoExportApi = {
   exportResources: () =>
     mockResponse(new Blob(['mock export data'], { type: 'application/json' })),
+};
+export const demoLogsApi = {
+  getAggregatedLogs: (params: URLSearchParams) => {
+    const clusterIds = params.getAll('cluster_id');
+    const namespace = params.get('namespace');
+    const labelSelector = params.get('label_selector');
+    const tailLines = parseInt(params.get('tail_lines') || '100', 10);
+    
+    let filteredLogs = [...mockLogs];
+    
+    // Filter by cluster IDs
+    if (clusterIds.length > 0) {
+      filteredLogs = filteredLogs.filter(log => clusterIds.includes(log.cluster_id));
+    }
+    
+    // Filter by namespace
+    if (namespace) {
+      filteredLogs = filteredLogs.filter(log => log.namespace === namespace);
+    }
+    
+    // Simulate label selector filtering (in real world, this would filter pods)
+    if (labelSelector) {
+      // Just reduce the logs for demo purposes
+      filteredLogs = filteredLogs.slice(0, Math.floor(filteredLogs.length / 2));
+    }
+    
+    // Limit to tail lines
+    filteredLogs = filteredLogs.slice(0, tailLines);
+    
+    return mockResponse({ logs: filteredLogs, count: filteredLogs.length });
+  },
 };

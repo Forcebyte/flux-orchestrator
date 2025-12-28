@@ -9,6 +9,7 @@ import {
   demoActivityApi,
   demoOAuthApi,
   demoExportApi,
+  demoLogsApi,
 } from './demoApi';
 
 const API_BASE = '/api/v1';
@@ -187,6 +188,11 @@ export const rbacApi = {
   
   // Permissions
   listPermissions: () => api.get('/rbac/permissions'),
+};
+
+export const logsApi = IS_DEMO_MODE ? demoLogsApi : {
+  getAggregatedLogs: (params: URLSearchParams) =>
+    api.get(`/api/logs?${params.toString()}`),
 };
 
 export default api;
