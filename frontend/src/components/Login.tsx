@@ -33,7 +33,9 @@ export const Login: React.FC<LoginProps> = () => {
   const handleLogin = async () => {
     try {
       // Redirect to backend OAuth flow
-      window.location.href = `${fluxApi.axios.defaults.baseURL}/auth/login`;
+      if (fluxApi.axios) {
+        window.location.href = `${fluxApi.axios.defaults.baseURL}/auth/login`;
+      }
     } catch (err) {
       setError('Failed to initiate login');
     }

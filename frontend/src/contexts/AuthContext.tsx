@@ -53,6 +53,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return;
       }
       
+      // Check if axios instance is available
+      if (!fluxApi.axios) {
+        setAuthEnabled(false);
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+      
       // Check if auth is enabled
       const statusResponse = await fluxApi.axios.get<{ enabled: boolean }>('/auth/status');
       setAuthEnabled(statusResponse.data.enabled);
@@ -82,12 +90,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const login = () => {
-    window.location.href = `${fluxApi.axios.defaults.baseURL}/auth/login`;
+    if (fluxApi.axios) {
+      window.location.href = `${fluxApi.axios.defaults.baseURL}/auth/login`;
+    }
   };
 
   const logout = async () => {
     try {
-      await fluxApi.axios.post('/auth/logout');
+      if (fluxApi.axios) {
+        await fluxApi.axios.post('/auth/logout');
+      }
       setUser(null);
     } catch (error) {
       console.error('Logout failed:', error);

@@ -104,9 +104,9 @@ export const demoFluxApi = {
   getChildren: () =>
     mockResponse({
       resources: [
-        { kind: 'Deployment', name: 'app-deployment', namespace: 'default', status: 'Ready', version: 'v1' },
-        { kind: 'Service', name: 'app-service', namespace: 'default', status: 'Ready', version: 'v1' },
-        { kind: 'ConfigMap', name: 'app-config', namespace: 'default', status: 'Ready', version: 'v1' },
+        { id: 'child-1', kind: 'Deployment', name: 'app-deployment', namespace: 'default', status: 'Ready', version: 'v1' },
+        { id: 'child-2', kind: 'Service', name: 'app-service', namespace: 'default', status: 'Ready', version: 'v1' },
+        { id: 'child-3', kind: 'ConfigMap', name: 'app-config', namespace: 'default', status: 'Ready', version: 'v1' },
       ],
       count: 3,
     }),
@@ -139,19 +139,23 @@ export const demoAzureApi = {
     mockResponse({
       clusters: [
         {
+          id: '/subscriptions/demo/resourceGroups/rg-production/providers/Microsoft.ContainerService/managedClusters/aks-prod-001',
           name: 'aks-prod-001',
           resource_group: 'rg-production',
           location: 'eastus',
           kubernetes_version: '1.28.3',
           node_count: 3,
+          fqdn: 'aks-prod-001-abc123.eastus.azmk8s.io',
           status: 'Running',
         },
         {
+          id: '/subscriptions/demo/resourceGroups/rg-staging/providers/Microsoft.ContainerService/managedClusters/aks-staging-001',
           name: 'aks-staging-001',
           resource_group: 'rg-staging',
           location: 'westus2',
           kubernetes_version: '1.27.8',
           node_count: 2,
+          fqdn: 'aks-staging-001-def456.westus2.azmk8s.io',
           status: 'Running',
         },
       ],
