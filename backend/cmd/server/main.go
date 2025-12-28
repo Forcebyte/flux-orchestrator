@@ -22,7 +22,7 @@ import (
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/rbac"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/webhooks"
 
-	_ "github.com/Forcebyte/flux-orchestrator/docs" // swagger docs
+	// _ "github.com/Forcebyte/flux-orchestrator/docs" // swagger docs - disabled for build compatibility
 	"go.uber.org/zap"
 )
 
