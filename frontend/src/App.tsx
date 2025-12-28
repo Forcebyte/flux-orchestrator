@@ -7,6 +7,7 @@ import Audit from './components/Audit';
 import Clusters from './components/Clusters';
 import ClusterDetail from './components/ClusterDetail';
 import Settings from './components/Settings';
+import LogAggregation from './components/LogAggregation';
 import { Login } from './components/Login';
 import './App.css';
 
@@ -44,6 +45,12 @@ const Sidebar: React.FC = () => {
           className={`nav-item ${location.pathname === '/audit' ? 'active' : ''}`}
         >
           Audit
+        </Link>
+        <Link
+          to="/logs"
+          className={`nav-item ${location.pathname === '/logs' ? 'active' : ''}`}
+        >
+          Logs
         </Link>
         <Link
           to="/settings"
@@ -141,6 +148,7 @@ const AppContent: React.FC = () => {
           <Route path="/clusters" element={<Clusters />} />
           <Route path="/clusters/:id" element={<ClusterDetail />} />
           <Route path="/audit" element={<Audit />} />
+          <Route path="/logs" element={<LogAggregation />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </div>

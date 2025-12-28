@@ -135,6 +135,11 @@ func (s *Server) routes() {
 	api.HandleFunc("/clusters/{id}/pods/{namespace}/{name}/containers", s.getPodContainers).Methods("GET", "OPTIONS")
 	api.HandleFunc("/clusters/{id}/pods/{namespace}/{name}", s.deletePod).Methods("DELETE", "OPTIONS")
 
+	// Resource diff and logs
+	api.HandleFunc("/clusters/{id}/resources/{kind}/{namespace}/{name}/manifest", s.getResourceManifest).Methods("GET", "OPTIONS")
+	api.HandleFunc("/clusters/{id}/resources/{kind}/{namespace}/{name}/diff", s.getResourceDiff).Methods("GET", "OPTIONS")
+	api.HandleFunc("/logs/aggregated", s.getAggregatedLogs).Methods("GET", "OPTIONS")
+
 	// Settings
 	api.HandleFunc("/settings", s.getSettings).Methods("GET", "OPTIONS")
 	api.HandleFunc("/settings/{key}", s.updateSetting).Methods("PUT", "OPTIONS")
@@ -2192,5 +2197,73 @@ func (s *Server) listPermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondJSON(w, http.StatusOK, permissions)
+}
+
+// ========== Resource Diff & Log Aggregation ==========
+
+// getResourceManifest returns the full manifest of a resource
+func (s *Server) getResourceManifest(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	clusterID := vars["id"]
+	kind := vars["kind"]
+	namespace := vars["namespace"]
+	name := vars["name"]
+
+	manifest, err := s.k8sClient.GetResourceManifest(r.Context(), clusterID, kind, namespace, name)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get resource manifest: %v", err))
+		return
+	}
+
+	respondJSON(w, http.StatusOK, manifest)
+}
+
+// getResourceDiff returns the diff between desired and actual state
+func (s *Server) getResourceDiff(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	clusterID := vars["id"]
+	kind := vars["kind"]
+	namespace := vars["namespace"]
+	name := vars["name"]
+
+	diff, err := s.k8sClient.GetResourceDiff(r.Context(), clusterID, kind, namespace, name)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get resource diff: %v", err))
+		return
+	}
+
+	respondJSON(w, http.StatusOK, diff)
+}
+
+// getAggregatedLogs returns aggregated logs from multiple pods/clusters
+func (s *Server) getAggregatedLogs(w http.ResponseWriter, r *http.Request) {
+	// Parse query parameters
+	clusterIDs := r.URL.Query()["cluster_id"]
+	namespace := r.URL.Query().Get("namespace")
+	labelSelector := r.URL.Query().Get("label_selector")
+	tailLines := int64(100)
+	if tl := r.URL.Query().Get("tail_lines"); tl != "" {
+		if parsed, err := strconv.ParseInt(tl, 10, 64); err == nil {
+			tailLines = parsed
+		}
+	}
+
+	filters := map[string]interface{}{
+		"cluster_ids":    clusterIDs,
+		"namespace":      namespace,
+		"label_selector": labelSelector,
+		"tail_lines":     tailLines,
+	}
+
+	logs, err := s.k8sClient.GetAggregatedLogs(r.Context(), filters)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get aggregated logs: %v", err))
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"logs":  logs,
+		"count": len(logs),
+	})
 }
 
