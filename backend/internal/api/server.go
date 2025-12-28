@@ -16,6 +16,7 @@ import (
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/encryption"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/k8s"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/models"
+	"github.com/Forcebyte/flux-orchestrator/backend/internal/rbac"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/webhooks"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -34,6 +35,7 @@ type Server struct {
 	sessionStore  *auth.SessionStore
 	authEnabled   bool
 	webhooks      *webhooks.Notifier
+	rbacManager   *rbac.Manager
 }
 
 // NewServer creates a new API server
@@ -48,6 +50,7 @@ func NewServer(db *database.DB, k8sClient *k8s.Client, encryptor *encryption.Enc
 		sessionStore:  auth.NewSessionStore(),
 		authEnabled:   oauthProvider != nil,
 		webhooks:      notifier,
+		rbacManager:   rbac.NewManager(db),
 	}
 	s.routes()
 	
@@ -135,6 +138,24 @@ func (s *Server) routes() {
 	// Settings
 	api.HandleFunc("/settings", s.getSettings).Methods("GET", "OPTIONS")
 	api.HandleFunc("/settings/{key}", s.updateSetting).Methods("PUT", "OPTIONS")
+
+	// RBAC - Users
+	api.HandleFunc("/rbac/users", s.listUsers).Methods("GET", "OPTIONS")
+	api.HandleFunc("/rbac/users/{id}", s.getUser).Methods("GET", "OPTIONS")
+	api.HandleFunc("/rbac/users/{id}", s.updateUser).Methods("PUT", "OPTIONS")
+	api.HandleFunc("/rbac/users/{id}", s.deleteUser).Methods("DELETE", "OPTIONS")
+	api.HandleFunc("/rbac/users/{id}/roles", s.assignUserRoles).Methods("PUT", "OPTIONS")
+
+	// RBAC - Roles
+	api.HandleFunc("/rbac/roles", s.listRoles).Methods("GET", "OPTIONS")
+	api.HandleFunc("/rbac/roles", s.createRole).Methods("POST", "OPTIONS")
+	api.HandleFunc("/rbac/roles/{id}", s.getRole).Methods("GET", "OPTIONS")
+	api.HandleFunc("/rbac/roles/{id}", s.updateRole).Methods("PUT", "OPTIONS")
+	api.HandleFunc("/rbac/roles/{id}", s.deleteRole).Methods("DELETE", "OPTIONS")
+	api.HandleFunc("/rbac/roles/{id}/permissions", s.assignRolePermissions).Methods("PUT", "OPTIONS")
+
+	// RBAC - Permissions
+	api.HandleFunc("/rbac/permissions", s.listPermissions).Methods("GET", "OPTIONS")
 
 	// Activities (audit log)
 	api.HandleFunc("/activities", s.listActivities).Methods("GET", "OPTIONS")
@@ -1885,3 +1906,291 @@ func (s *Server) testOAuthProvider(w http.ResponseWriter, r *http.Request) {
 		"message": "OAuth provider configuration is valid",
 	})
 }
+
+// ========== RBAC Handlers ==========
+
+// listUsers returns all users
+func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
+	var users []models.User
+	if err := s.db.Preload("Roles").Find(&users).Error; err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to fetch users: %v", err))
+		return
+	}
+	respondJSON(w, http.StatusOK, users)
+}
+
+// getUser returns a single user
+func (s *Server) getUser(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	var user models.User
+	if err := s.db.Preload("Roles.Permissions").Where("id = ?", id).First(&user).Error; err != nil {
+		respondError(w, http.StatusNotFound, "User not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, user)
+}
+
+// updateUser updates a user
+func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	var req struct {
+		Name    string `json:"name"`
+		Enabled *bool  `json:"enabled"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	updates := make(map[string]interface{})
+	if req.Name != "" {
+		updates["name"] = req.Name
+	}
+	if req.Enabled != nil {
+		updates["enabled"] = *req.Enabled
+	}
+
+	if err := s.db.Model(&models.User{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to update user: %v", err))
+		return
+	}
+
+	var user models.User
+	s.db.Preload("Roles").Where("id = ?", id).First(&user)
+	respondJSON(w, http.StatusOK, user)
+}
+
+// deleteUser deletes a user
+func (s *Server) deleteUser(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	if err := s.db.Delete(&models.User{}, "id = ?", id).Error; err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to delete user: %v", err))
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": "User deleted"})
+}
+
+// assignUserRoles assigns roles to a user
+func (s *Server) assignUserRoles(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	var req struct {
+		RoleIDs []string `json:"role_ids"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	var user models.User
+	if err := s.db.Where("id = ?", id).First(&user).Error; err != nil {
+		respondError(w, http.StatusNotFound, "User not found")
+		return
+	}
+
+	// Get roles
+	var roles []models.Role
+	if err := s.db.Where("id IN ?", req.RoleIDs).Find(&roles).Error; err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid roles")
+		return
+	}
+
+	// Replace user roles
+	if err := s.db.Model(&user).Association("Roles").Replace(roles); err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to assign roles: %v", err))
+		return
+	}
+
+	s.db.Preload("Roles").Where("id = ?", id).First(&user)
+	respondJSON(w, http.StatusOK, user)
+}
+
+// listRoles returns all roles
+func (s *Server) listRoles(w http.ResponseWriter, r *http.Request) {
+	var roles []models.Role
+	if err := s.db.Preload("Permissions").Find(&roles).Error; err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to fetch roles: %v", err))
+		return
+	}
+	respondJSON(w, http.StatusOK, roles)
+}
+
+// getRole returns a single role
+func (s *Server) getRole(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	var role models.Role
+	if err := s.db.Preload("Permissions").Where("id = ?", id).First(&role).Error; err != nil {
+		respondError(w, http.StatusNotFound, "Role not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, role)
+}
+
+// createRole creates a new role
+func (s *Server) createRole(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Permissions []string `json:"permission_ids"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.Name == "" {
+		respondError(w, http.StatusBadRequest, "Role name is required")
+		return
+	}
+
+	role := models.Role{
+		ID:          uuid.New().String(),
+		Name:        req.Name,
+		Description: req.Description,
+		BuiltIn:     false,
+	}
+
+	if err := s.db.Create(&role).Error; err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to create role: %v", err))
+		return
+	}
+
+	// Assign permissions if provided
+	if len(req.Permissions) > 0 {
+		var perms []models.Permission
+		if err := s.db.Where("id IN ?", req.Permissions).Find(&perms).Error; err == nil {
+			s.db.Model(&role).Association("Permissions").Append(perms)
+		}
+	}
+
+	s.db.Preload("Permissions").Where("id = ?", role.ID).First(&role)
+	respondJSON(w, http.StatusCreated, role)
+}
+
+// updateRole updates a role
+func (s *Server) updateRole(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	var role models.Role
+	if err := s.db.Where("id = ?", id).First(&role).Error; err != nil {
+		respondError(w, http.StatusNotFound, "Role not found")
+		return
+	}
+
+	if role.BuiltIn {
+		respondError(w, http.StatusForbidden, "Cannot modify built-in roles")
+		return
+	}
+
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	updates := make(map[string]interface{})
+	if req.Name != "" {
+		updates["name"] = req.Name
+	}
+	if req.Description != "" {
+		updates["description"] = req.Description
+	}
+
+	if err := s.db.Model(&role).Updates(updates).Error; err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to update role: %v", err))
+		return
+	}
+
+	s.db.Preload("Permissions").Where("id = ?", id).First(&role)
+	respondJSON(w, http.StatusOK, role)
+}
+
+// deleteRole deletes a role
+func (s *Server) deleteRole(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	var role models.Role
+	if err := s.db.Where("id = ?", id).First(&role).Error; err != nil {
+		respondError(w, http.StatusNotFound, "Role not found")
+		return
+	}
+
+	if role.BuiltIn {
+		respondError(w, http.StatusForbidden, "Cannot delete built-in roles")
+		return
+	}
+
+	if err := s.db.Delete(&role).Error; err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to delete role: %v", err))
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"message": "Role deleted"})
+}
+
+// assignRolePermissions assigns permissions to a role
+func (s *Server) assignRolePermissions(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	var req struct {
+		PermissionIDs []string `json:"permission_ids"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	var role models.Role
+	if err := s.db.Where("id = ?", id).First(&role).Error; err != nil {
+		respondError(w, http.StatusNotFound, "Role not found")
+		return
+	}
+
+	// Get permissions
+	var permissions []models.Permission
+	if err := s.db.Where("id IN ?", req.PermissionIDs).Find(&permissions).Error; err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid permissions")
+		return
+	}
+
+	// Replace role permissions
+	if err := s.db.Model(&role).Association("Permissions").Replace(permissions); err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to assign permissions: %v", err))
+		return
+	}
+
+	s.db.Preload("Permissions").Where("id = ?", id).First(&role)
+	respondJSON(w, http.StatusOK, role)
+}
+
+// listPermissions returns all permissions
+func (s *Server) listPermissions(w http.ResponseWriter, r *http.Request) {
+	var permissions []models.Permission
+	if err := s.db.Order("resource, action").Find(&permissions).Error; err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to fetch permissions: %v", err))
+		return
+	}
+	respondJSON(w, http.StatusOK, permissions)
+}
+

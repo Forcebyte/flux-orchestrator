@@ -356,7 +356,33 @@ All kubeconfig data is encrypted at rest using **Fernet** (AES-128-CBC with HMAC
 
 For more details, see [docs/ENCRYPTION.md](docs/ENCRYPTION.md).
 
-### RBAC Permissions
+### User Access Control (RBAC)
+
+Flux Orchestrator includes a comprehensive Role-Based Access Control system for managing user permissions:
+
+**Built-in Roles:**
+- **Administrator**: Full access to all resources, users, and settings
+- **Operator**: Can manage clusters and resources but not users or system settings
+- **Viewer**: Read-only access to all resources
+
+**Custom Roles:**
+Create custom roles with specific permissions through the Settings > RBAC interface.
+
+**Permission Model:**
+- `cluster.*` - Cluster management (create, read, update, delete)
+- `resource.*` - Flux resource operations (read, reconcile, suspend, resume, update, delete)
+- `user.*` - User management
+- `role.*` - Role management
+- `setting.*` - System settings
+- `azure.*` - Azure AKS integration
+
+**Configuration:**
+1. Enable OAuth authentication (GitHub or Microsoft Entra)
+2. Users are automatically created on first login with "Viewer" role
+3. Administrators can assign roles through Settings > RBAC
+4. Configure role permissions to match your organization's needs
+
+### Kubernetes RBAC Permissions
 
 The orchestrator requires the following Kubernetes permissions:
 

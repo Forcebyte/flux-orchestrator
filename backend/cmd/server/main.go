@@ -19,6 +19,7 @@ import (
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/k8s"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/logging"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/models"
+	"github.com/Forcebyte/flux-orchestrator/backend/internal/rbac"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/webhooks"
 
 	_ "github.com/Forcebyte/flux-orchestrator/docs" // swagger docs
@@ -104,10 +105,27 @@ func main() {
 	)
 
 	// Initialize database schema with GORM AutoMigrate
-	if err := db.InitSchema(&models.Cluster{}, &models.FluxResource{}, &models.AzureSubscription{}, &models.OAuthProvider{}, &models.Activity{}); err != nil {
+	if err := db.InitSchema(
+		&models.Cluster{}, 
+		&models.FluxResource{}, 
+		&models.AzureSubscription{}, 
+		&models.OAuthProvider{}, 
+		&models.Activity{},
+		&models.User{},
+		&models.Role{},
+		&models.Permission{},
+		&models.UserRole{},
+		&models.RolePermission{},
+	); err != nil {
 		logger.Fatal("Failed to initialize schema", zap.Error(err))
 	}
 	logger.Info("Database schema initialized")
+
+	// Initialize RBAC with default roles and permissions
+	rbacManager := rbac.NewManager(db)
+	if err := rbacManager.InitializeDefaultRoles(); err != nil {
+		logger.Error("Failed to initialize RBAC", zap.Error(err))
+	}
 
 	// Create Kubernetes client
 	k8sClient := k8s.NewClient()
