@@ -31,7 +31,7 @@ test: ## Run tests
 clean: ## Clean build artifacts
 	@echo "Cleaning..."
 	rm -rf bin/
-	rm -rf frontend/build/
+	rm -rf frontend/dist/
 	rm -rf frontend/node_modules/
 
 docker-build: ## Build Docker image

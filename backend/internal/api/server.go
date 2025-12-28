@@ -191,7 +191,7 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 // serveFrontend serves the frontend SPA and handles client-side routing
 func (s *Server) serveFrontend(w http.ResponseWriter, r *http.Request) {
 	// For SPA routing, serve index.html for all non-API routes
-	fs := http.Dir("./frontend/build")
+	fs := http.Dir("./frontend/dist")
 	file, err := fs.Open(r.URL.Path)
 	if err != nil {
 		// File not found, serve index.html for SPA routing

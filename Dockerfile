@@ -48,7 +48,7 @@ WORKDIR /root/
 
 # Copy built artifacts
 COPY --from=backend-builder /flux-orchestrator .
-COPY --from=frontend-builder /app/build ./frontend/build
+COPY --from=frontend-builder /app/dist ./frontend/dist
 
 # Add non-root user for security
 RUN addgroup -g 1000 flux && \
