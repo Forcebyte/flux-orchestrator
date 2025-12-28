@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { fluxApi } from '../api';
 
+// Check if we're in demo mode
+const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
+
 interface UserInfo {
   id: string;
   email: string;
@@ -41,6 +44,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const checkAuth = async () => {
     try {
       setIsLoading(true);
+      
+      // In demo mode, always disable auth
+      if (IS_DEMO_MODE) {
+        setAuthEnabled(false);
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
       
       // Check if auth is enabled
       const statusResponse = await fluxApi.axios.get<{ enabled: boolean }>('/auth/status');

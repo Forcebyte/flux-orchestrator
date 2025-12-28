@@ -1,13 +1,27 @@
 import axios from 'axios';
 import { Cluster, FluxResource, ReconcileRequest, FluxStats, FluxResourceChild, Setting, ResourceNode, AzureSubscription, AKSCluster, AzureCredentials, Activity, OAuthProvider } from './types';
+import {
+  demoClusterApi,
+  demoResourceApi,
+  demoFluxApi,
+  demoSettingsApi,
+  demoAzureApi,
+  demoActivityApi,
+  demoOAuthApi,
+  demoExportApi,
+} from './demoApi';
 
 const API_BASE = '/api/v1';
+
+// Check if we're in demo mode
+const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
 
 const api = axios.create({
   baseURL: API_BASE,
 });
 
-export const clusterApi = {
+// Export the appropriate API based on mode
+export const clusterApi = IS_DEMO_MODE ? demoClusterApi : {
   list: () => api.get<Cluster[]>('/clusters'),
   get: (id: string) => api.get<Cluster>(`/clusters/${id}`),
   create: (data: { name: string; description: string; kubeconfig: string }) =>
@@ -23,7 +37,7 @@ export const clusterApi = {
     api.get(`/clusters/${id}/export?format=${format}`, { responseType: 'blob' }),
 };
 
-export const resourceApi = {
+export const resourceApi = IS_DEMO_MODE ? demoResourceApi : {
   listAll: (kind?: string) => api.get<FluxResource[]>('/resources', { params: { kind } }),
   listByCluster: (clusterId: string) => api.get<FluxResource[]>(`/clusters/${clusterId}/resources`),
   get: (id: string) => api.get<FluxResource>(`/resources/${id}`),
@@ -46,7 +60,7 @@ export const resourceApi = {
     api.delete(`/clusters/${clusterId}/pods/${namespace}/${podName}`),
 };
 
-export const fluxApi = {
+export const fluxApi = IS_DEMO_MODE ? demoFluxApi : {
   // Expose the axios instance for direct usage
   axios: api,
   
@@ -66,12 +80,12 @@ export const fluxApi = {
     api.get<{ resources: FluxResourceChild[]; count: number }>(`/clusters/${clusterId}/flux/${kind}/${namespace}/${name}/resources`),
 };
 
-export const settingsApi = {
+export const settingsApi = IS_DEMO_MODE ? demoSettingsApi : {
   list: () => api.get<Setting[]>('/settings'),
   update: (key: string, value: string) => api.put<Setting>(`/settings/${key}`, { value }),
 };
 
-export const azureApi = {
+export const azureApi = IS_DEMO_MODE ? demoAzureApi : {
   // List all Azure subscriptions
   listSubscriptions: () => api.get<AzureSubscription[]>('/azure/subscriptions'),
   
@@ -95,7 +109,7 @@ export const azureApi = {
   syncClusters: (id: string) => api.post<{ synced: number; failed: number; clusters: Array<{ name: string; status: string; error?: string }> }>(`/azure/subscriptions/${id}/sync`),
 };
 
-export const activityApi = {
+export const activityApi = IS_DEMO_MODE ? demoActivityApi : {
   // List recent activities
   list: (params?: { limit?: number; cluster_id?: string }) => 
     api.get<Activity[]>('/activities', { params }),
@@ -104,7 +118,7 @@ export const activityApi = {
   get: (id: number) => api.get<Activity>(`/activities/${id}`),
 };
 
-export const oauthApi = {
+export const oauthApi = IS_DEMO_MODE ? demoOAuthApi : {
   // List all OAuth providers
   listProviders: () => api.get<OAuthProvider[]>('/oauth/providers'),
   
@@ -143,7 +157,7 @@ export const oauthApi = {
   testProvider: (id: string) => api.post<{ status: string; message: string }>(`/oauth/providers/${id}/test`),
 };
 
-export const exportApi = {
+export const exportApi = IS_DEMO_MODE ? demoExportApi : {
   // Export resources as CSV or JSON
   exportResources: (params?: { format?: 'json' | 'csv'; status?: string; kind?: string }) =>
     api.get('/resources/export', { params, responseType: 'blob' }),

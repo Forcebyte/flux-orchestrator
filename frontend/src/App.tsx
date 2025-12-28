@@ -10,6 +10,8 @@ import Settings from './components/Settings';
 import { Login } from './components/Login';
 import './App.css';
 
+const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
+
 const Sidebar: React.FC = () => {
   const location = useLocation();
   const { user, authEnabled, logout } = useAuth();
@@ -121,6 +123,19 @@ const AppContent: React.FC = () => {
     <div className="app-container">
       <Sidebar />
       <div className="main-content">
+        {IS_DEMO_MODE && (
+          <div style={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: 'white',
+            padding: '0.75rem 1rem',
+            textAlign: 'center',
+            fontWeight: '600',
+            fontSize: '0.875rem',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+          }}>
+            🎭 Demo Mode - All data is simulated for demonstration purposes
+          </div>
+        )}
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/clusters" element={<Clusters />} />
