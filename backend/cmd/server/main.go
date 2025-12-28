@@ -17,6 +17,27 @@ import (
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/models"
 )
 
+// @title Flux Orchestrator API
+// @version 1.0
+// @description API for managing Flux CD resources across multiple Kubernetes clusters
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.url https://github.com/Forcebyte/flux-orchestrator
+// @contact.email support@example.com
+
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+
+// @host localhost:8080
+// @BasePath /api/v1
+// @schemes http https
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
+
 func main() {
 	log.Println("Starting Flux Orchestrator...")
 
@@ -52,7 +73,7 @@ func main() {
 	defer sqlDB.Close()
 
 	// Initialize database schema with GORM AutoMigrate
-	if err := db.InitSchema(&models.Cluster{}, &models.FluxResource{}, &models.AzureSubscription{}, &models.Activity{}); err != nil {
+	if err := db.InitSchema(&models.Cluster{}, &models.FluxResource{}, &models.AzureSubscription{}, &models.OAuthProvider{}, &models.Activity{}); err != nil {
 		log.Fatalf("Failed to initialize schema: %v", err)
 	}
 

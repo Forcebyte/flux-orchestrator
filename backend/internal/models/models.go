@@ -35,6 +35,23 @@ type AzureSubscription struct {
 	UpdatedAt      time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
+// OAuthProvider represents an OAuth provider configuration (GitHub, Entra ID)
+type OAuthProvider struct {
+	ID           string    `json:"id" gorm:"primaryKey;size:100"`
+	Name         string    `json:"name" gorm:"size:255;not null"`
+	Provider     string    `json:"provider" gorm:"size:50;not null"` // github, entra
+	ClientID     string    `json:"client_id" gorm:"size:255;not null"`
+	ClientSecret string    `json:"-" gorm:"type:text;not null"` // Encrypted
+	TenantID     string    `json:"tenant_id" gorm:"size:100"` // For Entra ID only
+	RedirectURL  string    `json:"redirect_url" gorm:"size:500;not null"`
+	Scopes       string    `json:"scopes" gorm:"type:text"` // Comma-separated scopes
+	AllowedUsers string    `json:"allowed_users" gorm:"type:text"` // Comma-separated emails/usernames
+	Enabled      bool      `json:"enabled" gorm:"default:false"`
+	Status       string    `json:"status" gorm:"size:50;default:'unknown'"` // healthy, unhealthy, unknown
+	CreatedAt    time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt    time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
 // Setting represents application settings
 type Setting struct {
 	Key       string    `json:"key" gorm:"primaryKey;size:100;column:setting_key"`

@@ -111,3 +111,18 @@ export interface Activity {
   message: string;
   created_at: string;
 }
+
+export interface OAuthProvider {
+  id: string;
+  name: string;
+  provider: 'github' | 'entra';
+  client_id: string;
+  tenant_id?: string;
+  redirect_url: string;
+  scopes?: string;
+  allowed_users?: string;
+  enabled: boolean;
+  status: 'healthy' | 'unhealthy' | 'unknown';
+  created_at: string;
+  updated_at: string;
+}

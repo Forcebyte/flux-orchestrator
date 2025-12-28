@@ -4,6 +4,10 @@
   margin: 0 auto;
 }
 
+.dashboard-content {
+  padding: 0;
+}
+
 .dashboard-header {
   display: flex;
   justify-content: space-between;
@@ -14,12 +18,12 @@
 .dashboard-header h2 {
   margin: 0 0 8px 0;
   font-size: 28px;
-  color: #1a202c;
+  color: var(--text-primary);
 }
 
 .dashboard-header p {
   margin: 0;
-  color: #718096;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
@@ -41,8 +45,8 @@
 }
 
 .clear-filters-btn {
-  background: #e2e8f0;
-  color: #2d3748;
+  background: var(--border-color);
+  color: var(--text-primary);
   border: none;
   padding: 4px 12px;
   border-radius: 16px;
@@ -53,7 +57,7 @@
 }
 
 .clear-filters-btn:hover {
-  background: #cbd5e0;
+  background: var(--bg-hover);
 }
 
 .refresh-btn {
@@ -80,7 +84,7 @@
 .dashboard-loading {
   text-align: center;
   padding: 60px;
-  color: #718096;
+  color: var(--text-secondary);
   font-size: 16px;
 }
 
@@ -93,7 +97,7 @@
 }
 
 .stat-card {
-  background: white;
+  background: var(--bg-secondary);
   border-radius: 12px;
   padding: 24px;
   display: flex;
@@ -148,7 +152,7 @@
 .stat-content h3 {
   margin: 0 0 8px 0;
   font-size: 14px;
-  color: #718096;
+  color: var(--text-secondary);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -157,14 +161,14 @@
 .stat-value {
   font-size: 36px;
   font-weight: 700;
-  color: #1a202c;
+  color: var(--text-primary);
   line-height: 1;
   margin-bottom: 8px;
 }
 
 .stat-trend {
   font-size: 12px;
-  color: #718096;
+  color: var(--text-secondary);
 }
 
 /* Health Overview */
@@ -179,7 +183,7 @@
 .health-overview h3 {
   margin: 0 0 16px 0;
   font-size: 18px;
-  color: #1a202c;
+  color: var(--text-primary);
 }
 
 .health-bar {
@@ -211,7 +215,7 @@
   display: flex;
   gap: 24px;
   font-size: 14px;
-  color: #4a5568;
+  color: var(--text-secondary);
 }
 
 .health-legend span {
@@ -257,9 +261,9 @@
 .dashboard-card h3 {
   margin: 0 0 20px 0;
   font-size: 18px;
-  color: #1a202c;
+  color: var(--text-primary);
   padding-bottom: 12px;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid var(--border-color);
 }
 
 /* Resources by Kind */
@@ -309,7 +313,7 @@
 
 .kind-name {
   font-weight: 500;
-  color: #2d3748;
+  color: var(--text-primary);
 }
 
 .kind-stats {
@@ -320,7 +324,7 @@
 
 .kind-count {
   font-weight: 600;
-  color: #4a5568;
+  color: var(--text-secondary);
   min-width: 30px;
   text-align: right;
 }
@@ -382,14 +386,14 @@
 
 .cluster-name {
   font-weight: 600;
-  color: #1a202c;
+  color: var(--text-primary);
   font-size: 16px;
   margin-bottom: 4px;
 }
 
 .cluster-desc {
   font-size: 13px;
-  color: #718096;
+  color: var(--text-secondary);
 }
 
 .cluster-status {
@@ -428,7 +432,7 @@
 
 .stat-label {
   font-size: 12px;
-  color: #718096;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -436,7 +440,7 @@
 .stat-number {
   font-size: 20px;
   font-weight: 700;
-  color: #2d3748;
+  color: var(--text-primary);
 }
 
 .stat-number.ready {
@@ -455,13 +459,13 @@
   align-items: center;
   gap: 12px;
   padding: 12px;
-  background: #f7fafc;
+  background: var(--bg-tertiary);
   border-radius: 8px;
   transition: all 0.2s;
 }
 
 .resource-row:hover {
-  background: #edf2f7;
+  background: var(--bg-hover);
   transform: translateX(4px);
 }
 
@@ -476,7 +480,7 @@
 
 .resource-name {
   font-weight: 500;
-  color: #2d3748;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -484,7 +488,7 @@
 
 .resource-meta {
   font-size: 12px;
-  color: #718096;
+  color: var(--text-secondary);
 }
 
 .status-badge {
@@ -707,4 +711,40 @@
 
 .dark-mode .resource-meta {
   color: #cbd5e0;
+}
+
+/* Dark mode status badges */
+.dark-mode .status-badge.status-ready {
+  background: #22543d;
+  color: #c6f6d5;
+}
+
+.dark-mode .status-badge.status-notready {
+  background: #742a2a;
+  color: #fed7d7;
+}
+
+.dark-mode .status-badge.status-unknown {
+  background: #4a5568;
+  color: #e2e8f0;
+}
+
+.dark-mode .cluster-status.healthy {
+  background: #22543d;
+  color: #c6f6d5;
+}
+
+.dark-mode .cluster-status.degraded {
+  background: #742a2a;
+  color: #fed7d7;
+}
+
+.dark-mode .cluster-status.unknown {
+  background: #4a5568;
+  color: #e2e8f0;
+}
+
+.dark-mode .suspend-badge {
+  background: #7c2d12;
+  color: #feebc8;
 }

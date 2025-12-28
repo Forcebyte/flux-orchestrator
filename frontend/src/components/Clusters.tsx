@@ -112,20 +112,20 @@ const Clusters: React.FC = () => {
   }
 
   return (
-    <div>
+    <div className="dashboard">
       <Toast toasts={toasts} removeToast={removeToast} />
       
-      <div className="header">
-        <h2>Clusters</h2>
-        <div className="header-actions">
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-            + Add Cluster
-          </button>
+      <div className="dashboard-header">
+        <div>
+          <h2>🗄️ Clusters</h2>
+          <p>Manage your Kubernetes clusters and monitor their health</p>
         </div>
+        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+          + Add Cluster
+        </button>
       </div>
 
-      <div className="content">
-        {clusters.length === 0 ? (
+      <div className="dashboard-content">{clusters.length === 0 ? (
           <div className="empty-state">
             <h3>No Clusters</h3>
             <p>Add your first Kubernetes cluster to get started</p>

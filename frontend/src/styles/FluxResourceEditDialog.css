@@ -4,7 +4,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--modal-overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -13,7 +13,7 @@
 }
 
 .dialog-content {
-  background: white;
+  background: var(--bg-secondary);
   border-radius: 8px;
   max-width: 600px;
   width: 100%;
@@ -28,20 +28,20 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .dialog-header h3 {
   margin: 0;
   font-size: 1.5rem;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .dialog-close {
   background: none;
   border: none;
   font-size: 2rem;
-  color: #666;
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0;
   width: 32px;
@@ -54,8 +54,8 @@
 }
 
 .dialog-close:hover {
-  background: #f5f5f5;
-  color: #333;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .dialog-error {
@@ -81,7 +81,7 @@
   display: block;
   margin-bottom: 6px;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
   font-size: 0.95rem;
 }
 
@@ -92,9 +92,11 @@
 .form-control {
   width: 100%;
   padding: 10px 12px;
-  border: 2px solid #ddd;
+  border: 2px solid var(--input-border);
   border-radius: 6px;
   font-size: 1rem;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   transition: border-color 0.2s;
   font-family: inherit;
 }

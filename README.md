@@ -6,9 +6,15 @@
 
 <p><i>A comprehensive multi-cluster GitOps management platform for Flux CD</i></p>
 
+[![Deploy Demo](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/forcebyte/flux-orchestrator&env=VITE_DEMO_MODE&envDescription=Demo%20mode%20configuration)
+
 </div>
 
+---
 
+**🎭 [Try the Live Demo](DEMO.md)** | [Documentation](docs/) | [Quick Start](#quick-start) | [Features](#features)
+
+---
 
 This service provides a centralized UI and API similar to ArgoCD for managing Flux across multiple Kubernetes clusters.
 

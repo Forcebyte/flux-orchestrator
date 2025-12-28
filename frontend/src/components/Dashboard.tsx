@@ -112,7 +112,7 @@ const Dashboard: React.FC = () => {
     <div className="dashboard">
       <div className="dashboard-header">
         <div>
-          <h2>Dashboard</h2>
+          <h2>📊 Dashboard</h2>
           <p>Overview of all Flux resources across clusters</p>
           {(statusFilter !== 'all' || kindFilter !== 'all' || clusterFilter !== 'all') && (
             <div className="active-filters">

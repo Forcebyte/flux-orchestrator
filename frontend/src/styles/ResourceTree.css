@@ -1,8 +1,8 @@
 .resource-tree {
-  background: white;
+  background: var(--bg-secondary);
   border-radius: 8px;
   padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px var(--card-shadow);
 }
 
 .tree-header {
@@ -11,7 +11,7 @@
   align-items: center;
   margin-bottom: 20px;
   padding-bottom: 15px;
-  border-bottom: 2px solid #e0e0e0;
+  border-bottom: 2px solid var(--border-color);
 }
 
 .tree-header h3 {
@@ -116,13 +116,13 @@
   gap: 8px;
   padding: 10px 12px;
   border-radius: 6px;
-  border-left: 4px solid #ccc;
-  background: #fafafa;
+  border-left: 4px solid var(--border-color);
+  background: var(--bg-tertiary);
   transition: all 0.2s;
 }
 
 .node-content:hover {
-  background: #f0f0f0;
+  background: var(--bg-hover);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 

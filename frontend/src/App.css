@@ -11,13 +11,36 @@
   --bg-sidebar-header: #1a202c;
   --bg-hover: #f7fafc;
   --bg-table-header: #f7fafc;
+  --bg-tertiary: #fafafa;
   --text-primary: #333;
   --text-secondary: #666;
   --text-muted: #718096;
   --text-sidebar: #ffffff;
   --border-color: #e2e8f0;
+  --border-color-dark: #ddd;
+  --border-hover: #999;
+  --card-bg: #ffffff;
   --card-shadow: rgba(0, 0, 0, 0.1);
+  --input-bg: #ffffff;
   --input-border: #cbd5e0;
+  --disabled-bg: #e2e8f0;
+  --hover-bg: #f0f0f0;
+  --primary-color: #0066cc;
+  --primary-hover: #0052a3;
+  --error-bg: #fee;
+  --error-border: #fcc;
+  --error-text: #c33;
+  --info-bg: #e7f3ff;
+  --info-border: #b3d9ff;
+  --overlay-bg: rgba(0, 0, 0, 0.5);
+  --modal-overlay-bg: rgba(0, 0, 0, 0.6);
+  --logs-bg: #0a0a0a;
+  --logs-viewer-bg: #1e1e1e;
+  --logs-border: #333;
+  --logs-text: #d4d4d4;
+  --logs-control-bg: #2d2d2d;
+  --logs-control-border: #444;
+  --code-text: #2d3748;
 }
 
 .dark-mode {
@@ -27,13 +50,63 @@
   --bg-sidebar-header: #0d1117;
   --bg-hover: #374151;
   --bg-table-header: #374151;
+  --bg-tertiary: #374151;
   --text-primary: #e2e8f0;
   --text-secondary: #cbd5e0;
   --text-muted: #9ca3af;
   --text-sidebar: #cbd5e0;
   --border-color: #4a5568;
+  --border-color-dark: #4a5568;
+  --border-hover: #718096;
+  --card-bg: #2d3748;
+  --card-shadow: rgba(0, 0, 0, 0.3);
+  --input-bg: #1a202c;
+  --input-border: #4a5568;
+  --disabled-bg: #374151;
+  --hover-bg: #374151;
+  --primary-color: #3182ce;
+  --primary-hover: #2c5282;
+  --error-bg: #742a2a;
+  --error-border: #9b2c2c;
+  --error-text: #feb2b2;
+  --info-bg: #2c5282;
+  --info-border: #3182ce;
+  --overlay-bg: rgba(0, 0, 0, 0.7);
+  --modal-overlay-bg: rgba(0, 0, 0, 0.8);
+  --logs-bg: #0d1117;
+  --logs-viewer-bg: #1a202c;
+  --logs-border: #4a5568;
+  --logs-text: #e2e8f0;
+  --logs-control-bg: #2d3748;
+  --logs-control-border: #4a5568;
+  --code-text: #e2e8f0;
+}
+
+.dark-mode {
+  --bg-primary: #1a202c;
+  --bg-secondary: #2d3748;
+  --bg-sidebar: #1a202c;
+  --bg-sidebar-header: #0d1117;
+  --bg-hover: #374151;
+  --bg-table-header: #374151;
+  --bg-tertiary: #374151;
+  --text-primary: #e2e8f0;
+  --text-secondary: #cbd5e0;
+  --text-muted: #9ca3af;
+  --text-sidebar: #cbd5e0;
+  --border-color: #4a5568;
+  --border-color-dark: #4a5568;
   --card-shadow: rgba(0, 0, 0, 0.3);
   --input-border: #4a5568;
+  --overlay-bg: rgba(0, 0, 0, 0.7);
+  --modal-overlay-bg: rgba(0, 0, 0, 0.8);
+  --logs-bg: #0d1117;
+  --logs-viewer-bg: #1a202c;
+  --logs-border: #4a5568;
+  --logs-text: #e2e8f0;
+  --logs-control-bg: #2d3748;
+  --logs-control-border: #4a5568;
+  --code-text: #e2e8f0;
 }
 
 body {
@@ -224,6 +297,48 @@ code {
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;
+}
+
+/* Dark mode button improvements */
+.dark-mode .btn-success {
+  background: #38a169;
+  color: white;
+}
+
+.dark-mode .btn-success:hover {
+  background: #48bb78;
+}
+
+.dark-mode .btn-primary {
+  background: #3182ce;
+  color: white;
+}
+
+.dark-mode .btn-primary:hover {
+  background: #4299e1;
+}
+
+.dark-mode .btn-secondary {
+  background: #4a5568;
+  color: #e2e8f0;
+}
+
+.dark-mode .btn-secondary:hover {
+  background: #718096;
+}
+
+.dark-mode .btn-danger {
+  background: #c53030;
+  color: white;
+}
+
+.dark-mode .btn-danger:hover {
+  background: #e53e3e;
+}
+
+/* Dark mode status badges in App.css */
+.dark-mode .status-badge {
+  color: var(--text-primary);
 }
 
 .source-badge {

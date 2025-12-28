@@ -14,7 +14,7 @@
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  background: white;
+  background: var(--bg-secondary);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   cursor: pointer;
@@ -85,7 +85,7 @@
 .toast-message {
   flex: 1;
   font-size: 14px;
-  color: #2d3748;
+  color: var(--text-primary);
   line-height: 1.5;
 }
 
@@ -93,7 +93,7 @@
   background: none;
   border: none;
   font-size: 18px;
-  color: #a0aec0;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 4px;
   line-height: 1;
@@ -102,5 +102,5 @@
 }
 
 .toast-close:hover {
-  color: #2d3748;
+  color: var(--text-primary);
 }
