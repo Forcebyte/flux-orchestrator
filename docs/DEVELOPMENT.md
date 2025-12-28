@@ -106,6 +106,7 @@ flux-orchestrator/
 1. Edit files in `backend/`
 2. The server will need to be restarted (no hot reload)
 3. Run tests: `go test ./...`
+4. Check logs in terminal (use `ENV=development` for readable format)
 
 ### Frontend Changes
 
@@ -118,6 +119,50 @@ flux-orchestrator/
 1. Edit `backend/internal/database/database.go`
 2. The schema is created on startup if tables don't exist
 3. For migrations, you may need to manually update the database or drop tables
+
+## Monitoring and Debugging
+
+### Health Checks
+
+Check service health:
+```bash
+# Basic health check
+curl http://localhost:8080/health
+
+# Readiness (checks database and K8s client)
+curl http://localhost:8080/readiness
+
+# Liveness
+curl http://localhost:8080/liveness
+```
+
+### Metrics
+
+View Prometheus metrics:
+```bash
+curl http://localhost:8080/metrics
+```
+
+Metrics include:
+- HTTP request counts and durations
+- Cluster health status
+- Flux resource counts
+- Reconciliation metrics
+- Database query performance
+
+### Logs
+
+**Development mode** (human-readable):
+```bash
+ENV=development go run backend/cmd/server/main.go
+```
+
+**Production mode** (JSON for log aggregation):
+```bash
+go run backend/cmd/server/main.go
+```
+
+Each log entry includes a `request_id` for tracing requests through the system.
 
 ## Testing Locally
 

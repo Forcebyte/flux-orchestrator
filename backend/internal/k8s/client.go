@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/models"
@@ -23,14 +25,24 @@ type Client struct {
 	clients       map[string]dynamic.Interface
 	typedClients  map[string]*kubernetes.Clientset
 	configs       map[string]*rest.Config
+	timeout       time.Duration
 }
 
 // NewClient creates a new multi-cluster Kubernetes client
 func NewClient() *Client {
+	// Get timeout from env or default to 30 seconds
+	timeout := 30 * time.Second
+	if timeoutStr := os.Getenv("K8S_REQUEST_TIMEOUT_SECONDS"); timeoutStr != "" {
+		if val, err := strconv.Atoi(timeoutStr); err == nil && val > 0 {
+			timeout = time.Duration(val) * time.Second
+		}
+	}
+	
 	return &Client{
 		clients:      make(map[string]dynamic.Interface),
 		typedClients: make(map[string]*kubernetes.Clientset),
 		configs:      make(map[string]*rest.Config),
+		timeout:      timeout,
 	}
 }
 
@@ -40,6 +52,9 @@ func (c *Client) AddCluster(clusterID, kubeconfig string) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse kubeconfig: %w", err)
 	}
+	
+	// Set timeouts on the config
+	config.Timeout = c.timeout
 
 	client, err := dynamic.NewForConfig(config)
 	if err != nil {
@@ -63,6 +78,9 @@ func (c *Client) AddInClusterConfig(clusterID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get in-cluster config: %w", err)
 	}
+	
+	// Set timeouts on the config
+	config.Timeout = c.timeout
 
 	client, err := dynamic.NewForConfig(config)
 	if err != nil {
@@ -96,7 +114,7 @@ func (c *Client) CheckClusterHealth(clusterID string) (string, error) {
 		return "unknown", err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
 	// Try to list namespaces as a health check

@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/api"
@@ -14,7 +17,12 @@ import (
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/database"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/encryption"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/k8s"
+	"github.com/Forcebyte/flux-orchestrator/backend/internal/logging"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/models"
+	"github.com/Forcebyte/flux-orchestrator/backend/internal/webhooks"
+
+	_ "github.com/Forcebyte/flux-orchestrator/docs" // swagger docs
+	"go.uber.org/zap"
 )
 
 // @title Flux Orchestrator API
@@ -39,7 +47,15 @@ import (
 // @description Type "Bearer" followed by a space and JWT token.
 
 func main() {
-	log.Println("Starting Flux Orchestrator...")
+	// Initialize logger
+	isDev := logging.IsDevelopment()
+	if err := logging.InitLogger(isDev); err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logging.Sync()
+
+	logger := logging.GetLogger()
+	logger.Info("Starting Flux Orchestrator", zap.Bool("development", isDev))
 
 	// Load database configuration from environment
 	dbConfig := database.Config{
@@ -55,27 +71,43 @@ func main() {
 	// Initialize encryption
 	encryptionKey := getEnv("ENCRYPTION_KEY", "")
 	if encryptionKey == "" {
-		log.Fatal("ENCRYPTION_KEY environment variable is required")
+		logger.Fatal("ENCRYPTION_KEY environment variable is required")
 	}
 
 	encryptor, err := encryption.NewEncryptor(encryptionKey)
 	if err != nil {
-		log.Fatalf("Failed to initialize encryptor: %v", err)
+		logger.Fatal("Failed to initialize encryptor", zap.Error(err))
 	}
-	log.Println("Encryption initialized successfully")
+	logger.Info("Encryption initialized successfully")
 
 	// Connect to database
 	db, err := database.New(dbConfig)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		logger.Fatal("Failed to connect to database", zap.Error(err))
 	}
 	sqlDB, _ := db.DB.DB()
 	defer sqlDB.Close()
+	
+	// Configure connection pool
+	maxOpenConns := getEnvInt("DB_MAX_OPEN_CONNS", 25)
+	maxIdleConns := getEnvInt("DB_MAX_IDLE_CONNS", 5)
+	connMaxLifetime := getEnvInt("DB_CONN_MAX_LIFETIME_MINUTES", 5)
+	
+	sqlDB.SetMaxOpenConns(maxOpenConns)
+	sqlDB.SetMaxIdleConns(maxIdleConns)
+	sqlDB.SetConnMaxLifetime(time.Duration(connMaxLifetime) * time.Minute)
+	
+	logger.Info("Database connection established", 
+		zap.String("driver", dbConfig.Driver),
+		zap.Int("max_open_conns", maxOpenConns),
+		zap.Int("max_idle_conns", maxIdleConns),
+	)
 
 	// Initialize database schema with GORM AutoMigrate
 	if err := db.InitSchema(&models.Cluster{}, &models.FluxResource{}, &models.AzureSubscription{}, &models.OAuthProvider{}, &models.Activity{}); err != nil {
-		log.Fatalf("Failed to initialize schema: %v", err)
+		logger.Fatal("Failed to initialize schema", zap.Error(err))
 	}
+	logger.Info("Database schema initialized")
 
 	// Create Kubernetes client
 	k8sClient := k8s.NewClient()
@@ -86,26 +118,26 @@ func main() {
 	inClusterDesc := getEnv("IN_CLUSTER_DESCRIPTION", "Local cluster where Flux Orchestrator is deployed")
 
 	if scrapeInCluster {
-		log.Println("SCRAPE_IN_CLUSTER enabled - attempting to register in-cluster configuration")
+		logger.Info("SCRAPE_IN_CLUSTER enabled - attempting to register in-cluster configuration")
 		
 		// Check if in-cluster config already exists
 		var existingCluster models.Cluster
 		err := db.Where("name = ?", inClusterName).First(&existingCluster).Error
 		
 		if err != nil && err.Error() != "record not found" {
-			log.Printf("Warning: Failed to check for existing in-cluster config: %v", err)
+			logger.Warn("Failed to check for existing in-cluster config", zap.Error(err))
 		} else if existingCluster.ID == "" {
 			// Register in-cluster configuration
 			inClusterID := "in-cluster"
 			
 			// Use empty string to signal in-cluster config to k8s client
 			if err := k8sClient.AddInClusterConfig(inClusterID); err != nil {
-				log.Printf("Warning: Failed to add in-cluster configuration: %v", err)
+				logger.Warn("Failed to add in-cluster configuration", zap.Error(err))
 			} else {
 				// Check health before saving
 				status, healthErr := k8sClient.CheckClusterHealth(inClusterID)
 				if healthErr != nil {
-					log.Printf("Warning: In-cluster health check failed: %v", healthErr)
+					logger.Warn("In-cluster health check failed", zap.Error(healthErr))
 					status = "unhealthy"
 				}
 				
@@ -120,17 +152,17 @@ func main() {
 				err = db.Create(&cluster).Error
 				
 				if err != nil {
-					log.Printf("Warning: Failed to save in-cluster configuration to database: %v", err)
+					logger.Warn("Failed to save in-cluster configuration to database", zap.Error(err))
 				} else {
-					log.Printf("Successfully registered in-cluster configuration as '%s'", inClusterName)
+					logger.Info("Successfully registered in-cluster configuration", zap.String("name", inClusterName))
 				}
 			}
 		} else {
 			// In-cluster already exists, just ensure it's loaded
 			if err := k8sClient.AddInClusterConfig(existingCluster.ID); err != nil {
-				log.Printf("Warning: Failed to reload in-cluster configuration: %v", err)
+				logger.Warn("Failed to reload in-cluster configuration", zap.Error(err))
 			} else {
-				log.Printf("In-cluster configuration already registered with ID: %s", existingCluster.ID)
+				logger.Info("In-cluster configuration already registered", zap.String("id", existingCluster.ID))
 			}
 		}
 	}
@@ -138,20 +170,20 @@ func main() {
 	// Load existing clusters from database
 	var clusters []models.Cluster
 	if err := db.Where("kubeconfig != ?", "").Find(&clusters).Error; err != nil {
-		log.Printf("Warning: Failed to load existing clusters: %v", err)
+		logger.Warn("Failed to load existing clusters", zap.Error(err))
 	} else {
 		for _, cluster := range clusters {
 			// Decrypt kubeconfig
 			kubeconfig, err := encryptor.Decrypt(cluster.KubeConfig)
 			if err != nil {
-				log.Printf("Warning: Failed to decrypt kubeconfig for cluster %s: %v", cluster.ID, err)
+				logger.Warn("Failed to decrypt kubeconfig", zap.String("cluster_id", cluster.ID), zap.Error(err))
 				continue
 			}
 
 			if err := k8sClient.AddCluster(cluster.ID, kubeconfig); err != nil {
-				log.Printf("Warning: Failed to add cluster %s: %v", cluster.ID, err)
+				logger.Warn("Failed to add cluster", zap.String("cluster_id", cluster.ID), zap.Error(err))
 			} else {
-				log.Printf("Loaded cluster: %s", cluster.ID)
+				logger.Info("Loaded cluster", zap.String("cluster_id", cluster.ID))
 			}
 		}
 	}
@@ -176,31 +208,112 @@ func main() {
 		var err error
 		oauthProvider, err = auth.NewOAuthProvider(oauthConfig)
 		if err != nil {
-			log.Fatalf("Failed to initialize OAuth provider: %v", err)
+			logger.Fatal("Failed to initialize OAuth provider", zap.Error(err))
 		}
-		log.Printf("OAuth enabled with provider: %s", oauthConfig.Provider)
+		logger.Info("OAuth enabled", zap.String("provider", oauthConfig.Provider))
 	} else {
-		log.Println("OAuth disabled - running in open mode")
+		logger.Info("OAuth disabled - running in open mode")
+	}
+
+	// Configure webhooks
+	webhookURLsStr := getEnv("WEBHOOK_URLS", "")
+	webhookURLs := webhooks.ParseWebhookURLs(webhookURLsStr)
+	notifier := webhooks.NewNotifier(webhookURLs, logger.Named("webhooks"))
+	if len(webhookURLs) > 0 {
+		logger.Info("Webhook notifications enabled", zap.Int("webhook_count", len(webhookURLs)))
 	}
 
 	// Create API server
-	apiServer := api.NewServer(db, k8sClient, encryptor, oauthProvider)
+	apiServer := api.NewServer(db, k8sClient, encryptor, oauthProvider, notifier)
 
 	// Start background sync worker with dynamic interval
-	go syncWorker(db, k8sClient)
+	syncCtx, syncCancel := context.WithCancel(context.Background())
+	syncDone := make(chan struct{})
+	go func() {
+		syncWorker(syncCtx, db, k8sClient, notifier)
+		close(syncDone)
+	}()
 
 	// Start HTTP server
 	port := getEnv("PORT", "8080")
 	addr := fmt.Sprintf(":%s", port)
+	
+	// Configure timeouts
+	readTimeout := getEnvInt("HTTP_READ_TIMEOUT_SECONDS", 30)
+	writeTimeout := getEnvInt("HTTP_WRITE_TIMEOUT_SECONDS", 30)
+	idleTimeout := getEnvInt("HTTP_IDLE_TIMEOUT_SECONDS", 120)
+	
+	server := &http.Server{
+		Addr:         addr,
+		Handler:      apiServer,
+		ReadTimeout:  time.Duration(readTimeout) * time.Second,
+		WriteTimeout: time.Duration(writeTimeout) * time.Second,
+		IdleTimeout:  time.Duration(idleTimeout) * time.Second,
+	}
 
-	log.Printf("Server listening on %s", addr)
-	if err := http.ListenAndServe(addr, apiServer); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	// Channel to listen for server errors
+	serverErrors := make(chan error, 1)
+	
+	// Start server in goroutine
+	go func() {
+		logger.Info("Server starting", 
+			zap.String("address", addr),
+			zap.Bool("oauth_enabled", oauthProvider != nil),
+			zap.Int("read_timeout", readTimeout),
+			zap.Int("write_timeout", writeTimeout),
+		)
+		serverErrors <- server.ListenAndServe()
+	}()
+
+	// Listen for shutdown signals
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
+
+	// Block until we receive a signal or server error
+	select {
+	case err := <-serverErrors:
+		logger.Fatal("Server failed to start", zap.Error(err))
+	case sig := <-shutdown:
+		logger.Info("Shutdown signal received", zap.String("signal", sig.String()))
+
+		// Give outstanding requests time to complete
+		shutdownTimeout := getEnvInt("SHUTDOWN_TIMEOUT_SECONDS", 30)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(shutdownTimeout)*time.Second)
+		defer cancel()
+
+		// Stop accepting new requests
+		logger.Info("Shutting down HTTP server", zap.Int("timeout_seconds", shutdownTimeout))
+		if err := server.Shutdown(ctx); err != nil {
+			logger.Error("HTTP server shutdown error", zap.Error(err))
+			server.Close()
+		}
+
+		// Stop sync worker
+		logger.Info("Stopping sync worker")
+		syncCancel()
+		
+		// Wait for sync worker to finish (with timeout)
+		select {
+		case <-syncDone:
+			logger.Info("Sync worker stopped gracefully")
+		case <-time.After(10 * time.Second):
+			logger.Warn("Sync worker did not stop in time")
+		}
+
+		// Close database connection
+		logger.Info("Closing database connection")
+		if err := sqlDB.Close(); err != nil {
+			logger.Error("Error closing database", zap.Error(err))
+		}
+
+		logger.Info("Shutdown complete")
 	}
 }
 
 // syncWorker periodically syncs resources from all clusters
-func syncWorker(db *database.DB, k8sClient *k8s.Client) {
+func syncWorker(ctx context.Context, db *database.DB, k8sClient *k8s.Client, notifier *webhooks.Notifier) {
+	logger := logging.GetLogger().Named("sync-worker")
+	
 	// Start with default interval
 	interval := 5 * time.Minute
 	ticker := time.NewTicker(interval)
@@ -212,14 +325,18 @@ func syncWorker(db *database.DB, k8sClient *k8s.Client) {
 	// Goroutine to check for interval changes
 	go func() {
 		for {
-			time.Sleep(30 * time.Second) // Check every 30 seconds
-			var setting models.Setting
-			if err := db.Where("key = ?", "auto_sync_interval_minutes").First(&setting).Error; err == nil {
-				if minutes, err := strconv.Atoi(setting.Value); err == nil && minutes > 0 {
-					newInterval := time.Duration(minutes) * time.Minute
-					if newInterval != interval {
-						log.Printf("Auto-sync interval changed to %d minutes", minutes)
-						updateInterval <- newInterval
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(30 * time.Second):
+				var setting models.Setting
+				if err := db.Where("key = ?", "auto_sync_interval_minutes").First(&setting).Error; err == nil {
+					if minutes, err := strconv.Atoi(setting.Value); err == nil && minutes > 0 {
+						newInterval := time.Duration(minutes) * time.Minute
+						if newInterval != interval {
+							logger.Info("Auto-sync interval changed", zap.Int("minutes", minutes))
+							updateInterval <- newInterval
+						}
 					}
 				}
 			}
@@ -228,44 +345,58 @@ func syncWorker(db *database.DB, k8sClient *k8s.Client) {
 
 	for {
 		select {
+		case <-ctx.Done():
+			logger.Info("Sync worker shutting down")
+			return
 		case newInterval := <-updateInterval:
 			interval = newInterval
 			ticker.Reset(interval)
 		case <-ticker.C:
-			log.Println("Running periodic sync...")
+			logger.Info("Running periodic sync")
 
 			var clusters []models.Cluster
 			if err := db.Where("status = ?", "healthy").Find(&clusters).Error; err != nil {
-				log.Printf("Sync worker: Failed to query clusters: %v", err)
+				logger.Error("Failed to query clusters", zap.Error(err))
 				continue
 			}
 
 		for _, cluster := range clusters {
 			clusterID := cluster.ID
+			clusterLogger := logger.With(zap.String("cluster_id", clusterID))
+			
 			// Check cluster health
+			oldStatus := cluster.Status
 			status, err := k8sClient.CheckClusterHealth(clusterID)
 			db.Model(&models.Cluster{}).Where("id = ?", clusterID).Update("status", status)
 
+			// Notify if health changed
+			if oldStatus != status {
+				notifier.NotifyClusterHealthChanged(clusterID, oldStatus, status)
+			}
+
 			if err != nil {
-				log.Printf("Sync worker: Cluster %s is unhealthy: %v", clusterID, err)
+				clusterLogger.Warn("Cluster is unhealthy", zap.Error(err))
+				notifier.NotifySyncFailed(clusterID, err.Error())
 				continue
 			}
 
 			// Sync resources
 			resources, err := k8sClient.GetFluxResources(clusterID)
 			if err != nil {
-				log.Printf("Sync worker: Failed to get resources for cluster %s: %v", clusterID, err)
+				clusterLogger.Error("Failed to get resources", zap.Error(err))
+				notifier.NotifySyncFailed(clusterID, err.Error())
 				continue
 			}
 
 			for _, res := range resources {
 				// Use GORM's Clauses for upsert
 				if err := db.Save(&res).Error; err != nil {
-					log.Printf("Sync worker: Failed to save resource %s: %v", res.ID, err)
+					clusterLogger.Error("Failed to save resource", zap.String("resource_id", res.ID), zap.Error(err))
 				}
 			}
 
-			log.Printf("Sync worker: Synced %d resources from cluster %s", len(resources), clusterID)
+			clusterLogger.Info("Synced resources", zap.Int("count", len(resources)))
+			notifier.NotifySyncCompleted(clusterID, len(resources))
 		}
 		}
 	}

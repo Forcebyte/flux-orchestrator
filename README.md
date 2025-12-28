@@ -231,6 +231,7 @@ The dashboard provides an overview of all resources across all clusters:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `ENV` | Environment mode (`development`, `dev`, or `production`) | `production` |
 | `DB_DRIVER` | Database driver (`postgres` or `mysql`) | `postgres` |
 | `DB_HOST` | Database host | `localhost` |
 | `DB_PORT` | Database port | `5432` |
@@ -243,6 +244,18 @@ The dashboard provides an overview of all resources across all clusters:
 | `SCRAPE_IN_CLUSTER` | Enable in-cluster scraping | `false` |
 | `IN_CLUSTER_NAME` | Name for in-cluster configuration | `in-cluster` |
 | `IN_CLUSTER_DESCRIPTION` | Description for in-cluster | `Local cluster...` |
+| **Timeouts and Performance** | | |
+| `HTTP_READ_TIMEOUT_SECONDS` | HTTP server read timeout | `30` |
+| `HTTP_WRITE_TIMEOUT_SECONDS` | HTTP server write timeout | `30` |
+| `HTTP_IDLE_TIMEOUT_SECONDS` | HTTP server idle timeout | `120` |
+| `SHUTDOWN_TIMEOUT_SECONDS` | Graceful shutdown timeout | `30` |
+| `REQUEST_TIMEOUT_SECONDS` | Individual request timeout | `30` |
+| `K8S_REQUEST_TIMEOUT_SECONDS` | Kubernetes API timeout | `30` |
+| `DB_MAX_OPEN_CONNS` | Max open database connections | `25` |
+| `DB_MAX_IDLE_CONNS` | Max idle database connections | `5` |
+| `DB_CONN_MAX_LIFETIME_MINUTES` | Connection max lifetime | `5` |
+| **Webhook Notifications** | | |
+| `WEBHOOK_URLS` | Comma-separated webhook URLs | - |
 | **OAuth Configuration** | | |
 | `OAUTH_ENABLED` | Enable OAuth authentication | `false` |
 | `OAUTH_PROVIDER` | OAuth provider (`github` or `entra`) | - |
@@ -251,6 +264,30 @@ The dashboard provides an overview of all resources across all clusters:
 | `OAUTH_REDIRECT_URL` | OAuth callback URL | `http://localhost:8080/api/v1/auth/callback` |
 | `OAUTH_SCOPES` | Comma-separated OAuth scopes | - |
 | `OAUTH_ALLOWED_USERS` | Comma-separated allowed user emails (optional) | - |
+
+### Health Check Endpoints
+
+The service exposes several health check endpoints:
+
+- **`/health`** and **`/healthz`**: Basic health check (returns 200 OK)
+- **`/readiness`**: Readiness probe that checks database connectivity and Kubernetes client
+- **`/liveness`**: Liveness probe for Kubernetes (returns 200 OK)
+
+These endpoints are useful for Kubernetes probes and load balancer health checks.
+
+### Observability
+
+**Structured Logging**: The application uses [zap](https://github.com/uber-go/zap) for structured logging. Set `ENV=development` for human-readable logs.
+
+**Metrics**: Prometheus metrics are exposed at `/metrics` and include:
+- HTTP request counts and durations
+- Cluster health status
+- Flux resource counts by type and status
+- Reconciliation counts and errors
+- Sync worker performance
+- Database query metrics
+
+**Request Tracing**: All HTTP requests include a unique `request_id` in logs for tracing.
 
 ### OAuth Authentication (Optional)
 
@@ -273,6 +310,37 @@ For detailed setup instructions, see **[docs/OAUTH.md](docs/OAUTH.md)**.
 
 
 ## Security
+
+### Security Features
+
+Flux Orchestrator implements multiple layers of security:
+
+**Input Protection:**
+- Input validation middleware detecting SQL injection patterns
+- Path traversal protection
+- Command injection detection
+- XSS pattern filtering
+- Header length validation
+
+**HTTP Security Headers:**
+- Content-Security-Policy (CSP)
+- HTTP Strict Transport Security (HSTS) in production
+- X-Content-Type-Options: nosniff
+- X-Frame-Options: DENY
+- X-XSS-Protection
+- Referrer-Policy
+
+**Request Protection:**
+- Configurable request timeouts
+- Connection pooling limits
+- Rate limiting via middleware
+
+**Dependency Security:**
+- Automated dependency updates via Dependabot
+- Weekly security patch scanning
+- Grouped minor/patch updates
+
+See [docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md) for the complete security audit report.
 
 ### Kubeconfig Encryption
 

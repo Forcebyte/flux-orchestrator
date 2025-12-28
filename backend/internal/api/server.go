@@ -16,8 +16,10 @@ import (
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/encryption"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/k8s"
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/models"
+	"github.com/Forcebyte/flux-orchestrator/backend/internal/webhooks"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
@@ -31,10 +33,11 @@ type Server struct {
 	oauthProvider *auth.OAuthProvider
 	sessionStore  *auth.SessionStore
 	authEnabled   bool
+	webhooks      *webhooks.Notifier
 }
 
 // NewServer creates a new API server
-func NewServer(db *database.DB, k8sClient *k8s.Client, encryptor *encryption.Encryptor, oauthProvider *auth.OAuthProvider) *Server {
+func NewServer(db *database.DB, k8sClient *k8s.Client, encryptor *encryption.Encryptor, oauthProvider *auth.OAuthProvider, notifier *webhooks.Notifier) *Server {
 	s := &Server{
 		db:            db,
 		k8sClient:     k8sClient,
@@ -44,6 +47,7 @@ func NewServer(db *database.DB, k8sClient *k8s.Client, encryptor *encryption.Enc
 		oauthProvider: oauthProvider,
 		sessionStore:  auth.NewSessionStore(),
 		authEnabled:   oauthProvider != nil,
+		webhooks:      notifier,
 	}
 	s.routes()
 	
@@ -65,6 +69,18 @@ func NewServer(db *database.DB, k8sClient *k8s.Client, encryptor *encryption.Enc
 func (s *Server) routes() {
 	// Enable CORS
 	s.router.Use(corsMiddleware)
+	
+	// Enable security headers
+	s.router.Use(securityHeadersMiddleware)
+	
+	// Enable input validation
+	s.router.Use(inputValidationMiddleware)
+	
+	// Enable timeout middleware
+	s.router.Use(timeoutMiddleware)
+	
+	// Enable logging middleware
+	s.router.Use(loggingMiddleware)
 
 	// Auth routes (public)
 	if s.authEnabled {
@@ -147,8 +163,16 @@ func (s *Server) routes() {
 	api.HandleFunc("/oauth/providers/{id}", s.deleteOAuthProvider).Methods("DELETE", "OPTIONS")
 	api.HandleFunc("/oauth/providers/{id}/test", s.testOAuthProvider).Methods("POST", "OPTIONS")
 
-	// Health check
+	// Health check endpoints
 	s.router.HandleFunc("/health", s.health).Methods("GET")
+	s.router.HandleFunc("/healthz", s.health).Methods("GET")
+	s.router.HandleFunc("/readiness", s.readiness).Methods("GET")
+	s.router.HandleFunc("/liveness", s.liveness).Methods("GET")
+
+	// Metrics endpoint
+	s.router.Handle("/metrics", promhttp.Handler()).Methods("GET")
+
+	// Swagger documentation
 
 	// Swagger documentation
 	s.router.PathPrefix("/swagger/").Handler(httpSwagger.Handler(
@@ -186,6 +210,57 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // health returns server health status
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{"status": "healthy"})
+}
+
+// readiness returns server readiness status (checks dependencies)
+func (s *Server) readiness(w http.ResponseWriter, r *http.Request) {
+	checks := make(map[string]string)
+	healthy := true
+
+	// Check database connection
+	if s.db != nil {
+		sqlDB, err := s.db.DB.DB()
+		if err != nil {
+			checks["database"] = "error: " + err.Error()
+			healthy = false
+		} else if err := sqlDB.Ping(); err != nil {
+			checks["database"] = "error: " + err.Error()
+			healthy = false
+		} else {
+			checks["database"] = "ready"
+		}
+	} else {
+		checks["database"] = "not configured"
+		healthy = false
+	}
+
+	// Check Kubernetes client
+	if s.k8sClient != nil {
+		checks["k8s_client"] = "ready"
+	} else {
+		checks["k8s_client"] = "not configured"
+	}
+
+	status := "ready"
+	statusCode := http.StatusOK
+	if !healthy {
+		status = "not ready"
+		statusCode = http.StatusServiceUnavailable
+	}
+
+	response := map[string]interface{}{
+		"status": status,
+		"checks": checks,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(response)
+}
+
+// liveness returns server liveness status (basic health check)
+func (s *Server) liveness(w http.ResponseWriter, r *http.Request) {
+	respondJSON(w, http.StatusOK, map[string]string{"status": "alive"})
 }
 
 // serveFrontend serves the frontend SPA and handles client-side routing
