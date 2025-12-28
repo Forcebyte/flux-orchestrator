@@ -13,20 +13,27 @@ interface LogEntry {
   level?: string;
 }
 
+interface ParsedLogEntry extends LogEntry {
+  parsedTime: Date;
+  fields: Record<string, string>;
+}
+
 const LogAggregation: React.FC = () => {
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logs, setLogs] = useState<ParsedLogEntry[]>([]);
   const [clusters, setClusters] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [viewMode, setViewMode] = useState<'table' | 'raw'>('table');
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   
   // Filters
   const [selectedClusters, setSelectedClusters] = useState<string[]>([]);
-  const [namespace, setNamespace] = useState('');
+  const [namespace, setNamespace] = useState('flux-system');
   const [labelSelector, setLabelSelector] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [tailLines, setTailLines] = useState(100);
-  const [levelFilter, setLevelFilter] = useState<string>('all');
+  const [levelFilter, setLevelFilter] = useState<string[]>([]);
 
   useEffect(() => {
     loadClusters();
@@ -36,7 +43,7 @@ const LogAggregation: React.FC = () => {
     if (autoRefresh) {
       const interval = setInterval(() => {
         loadLogs();
-      }, 5000); // Refresh every 5 seconds
+      }, 10000); // Refresh every 10 seconds
       return () => clearInterval(interval);
     }
   }, [autoRefresh, selectedClusters, namespace, labelSelector, tailLines]);
@@ -45,9 +52,38 @@ const LogAggregation: React.FC = () => {
     try {
       const response = await clusterApi.list();
       setClusters(response.data);
+      // Auto-select all clusters by default
+      setSelectedClusters(response.data.map((c: any) => c.id));
     } catch (err: any) {
       console.error('Failed to load clusters:', err);
     }
+  };
+
+  const parseLogEntry = (log: LogEntry): ParsedLogEntry => {
+    const fields: Record<string, string> = {};
+    const message = log.message;
+    
+    // Try to extract JSON fields
+    try {
+      const jsonMatch = message.match(/\{.*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        Object.assign(fields, parsed);
+      }
+    } catch (e) {
+      // Not JSON, try key=value pairs
+      const kvMatches = message.matchAll(/(\w+)=("[^"]*"|'[^']*'|\S+)/g);
+      for (const match of kvMatches) {
+        fields[match[1]] = match[2].replace(/^["']|["']$/g, '');
+      }
+    }
+    
+    return {
+      ...log,
+      parsedTime: new Date(log.timestamp),
+      fields,
+      level: detectLogLevel(message)
+    };
   };
 
   const loadLogs = async () => {
@@ -69,13 +105,18 @@ const LogAggregation: React.FC = () => {
       
       const data = await response.json();
       
-      // Map cluster names
+      if (!data.logs || !Array.isArray(data.logs)) {
+        setLogs([]);
+        return;
+      }
+      
       const logsWithNames = data.logs.map((log: LogEntry) => ({
         ...log,
         cluster_name: clusters.find(c => c.id === log.cluster_id)?.name || log.cluster_id,
       }));
       
-      setLogs(logsWithNames);
+      const parsed = logsWithNames.map(parseLogEntry);
+      setLogs(parsed.sort((a: ParsedLogEntry, b: ParsedLogEntry) => b.parsedTime.getTime() - a.parsedTime.getTime()));
     } catch (err: any) {
       setError(err.message || 'Failed to load logs');
     } finally {
@@ -83,197 +124,417 @@ const LogAggregation: React.FC = () => {
     }
   };
 
-  const toggleCluster = (clusterId: string) => {
-    setSelectedClusters(prev =>
-      prev.includes(clusterId)
-        ? prev.filter(id => id !== clusterId)
-        : [...prev, clusterId]
+  const detectLogLevel = (message: string): string => {
+    const lower = message.toLowerCase();
+    if (lower.match(/\b(error|fatal|panic|critical)\b/)) return 'error';
+    if (lower.match(/\b(warn|warning)\b/)) return 'warn';
+    if (lower.match(/\b(info)\b/)) return 'info';
+    if (lower.match(/\b(debug|trace)\b/)) return 'debug';
+    return 'info';
+  };
+
+  const toggleLevelFilter = (level: string) => {
+    setLevelFilter(prev =>
+      prev.includes(level)
+        ? prev.filter(l => l !== level)
+        : [...prev, level]
     );
-  };
-
-  const selectAllClusters = () => {
-    setSelectedClusters(clusters.map(c => c.id));
-  };
-
-  const deselectAllClusters = () => {
-    setSelectedClusters([]);
   };
 
   const filteredLogs = logs.filter(log => {
     // Search filter
-    if (searchTerm && !log.message.toLowerCase().includes(searchTerm.toLowerCase())) {
-      return false;
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      const matches = 
+        log.message.toLowerCase().includes(searchLower) ||
+        log.cluster_name?.toLowerCase().includes(searchLower) ||
+        log.namespace.toLowerCase().includes(searchLower) ||
+        log.pod_name.toLowerCase().includes(searchLower);
+      if (!matches) return false;
     }
     
     // Level filter
-    if (levelFilter !== 'all') {
-      const message = log.message.toLowerCase();
-      if (levelFilter === 'error' && !message.includes('error') && !message.includes('fatal')) {
-        return false;
-      }
-      if (levelFilter === 'warn' && !message.includes('warn') && !message.includes('warning')) {
-        return false;
-      }
-      if (levelFilter === 'info' && (message.includes('error') || message.includes('warn'))) {
-        return false;
-      }
+    if (levelFilter.length > 0 && !levelFilter.includes(log.level || 'info')) {
+      return false;
     }
     
     return true;
   });
 
-  const detectLogLevel = (message: string): string => {
-    const lower = message.toLowerCase();
-    if (lower.includes('error') || lower.includes('fatal') || lower.includes('fail')) return 'error';
-    if (lower.includes('warn') || lower.includes('warning')) return 'warn';
-    if (lower.includes('info')) return 'info';
-    if (lower.includes('debug')) return 'debug';
-    return 'default';
+  const toggleRowExpansion = (index: number) => {
+    setExpandedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
+
+  const highlightSearch = (text: string) => {
+    if (!searchTerm) return text;
+    const parts = text.split(new RegExp(`(${searchTerm})`, 'gi'));
+    return parts.map((part, i) => 
+      part.toLowerCase() === searchTerm.toLowerCase() 
+        ? <mark key={i}>{part}</mark> 
+        : part
+    );
   };
 
   const downloadLogs = () => {
     const content = filteredLogs
-      .map(log => `[${log.timestamp}] [${log.cluster_name}/${log.namespace}/${log.pod_name}/${log.container}] ${log.message}`)
+      .map(log => `[${log.timestamp}] [${log.level?.toUpperCase()}] [${log.cluster_name}/${log.namespace}/${log.pod_name}] ${log.message}`)
       .join('\n');
     
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `logs-${new Date().toISOString()}.txt`;
+    a.download = `flux-logs-${new Date().toISOString().replace(/:/g, '-')}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
+  const getLevelStats = () => {
+    const stats = { error: 0, warn: 0, info: 0, debug: 0 };
+    filteredLogs.forEach(log => {
+      const level = log.level || 'info';
+      if (level in stats) stats[level as keyof typeof stats]++;
+    });
+    return stats;
+  };
+
+  const stats = getLevelStats();
+
   return (
     <div className="log-aggregation">
       <div className="log-header">
-        <h2>Log Aggregation</h2>
+        <div className="header-left">
+          <h2>📊 Log Explorer</h2>
+          <div className="view-toggle">
+            <button
+              className={viewMode === 'table' ? 'active' : ''}
+              onClick={() => setViewMode('table')}
+              title="Table view"
+            >
+              ☰ Table
+            </button>
+            <button
+              className={viewMode === 'raw' ? 'active' : ''}
+              onClick={() => setViewMode('raw')}
+              title="Raw view"
+            >
+              ⚡ Raw
+            </button>
+          </div>
+        </div>
         <div className="header-actions">
           <button
             className={`btn-refresh ${autoRefresh ? 'active' : ''}`}
             onClick={() => setAutoRefresh(!autoRefresh)}
-            title="Auto-refresh every 5 seconds"
+            title="Auto-refresh every 10 seconds"
           >
-            {autoRefresh ? '⏸ Pause' : '▶ Auto-Refresh'}
+            {autoRefresh ? '⏸ Pause' : '▶ Live'}
           </button>
-          <button onClick={downloadLogs} disabled={logs.length === 0}>
-            ⬇ Download
+          <button onClick={downloadLogs} disabled={filteredLogs.length === 0}>
+            ⬇ Export
           </button>
-          <button onClick={loadLogs} disabled={loading || selectedClusters.length === 0}>
-            🔄 Refresh
+          <button 
+            onClick={loadLogs} 
+            disabled={loading || selectedClusters.length === 0}
+            className="btn-primary"
+          >
+            {loading ? '⏳ Loading...' : '🔍 Search'}
           </button>
         </div>
       </div>
 
-      <div className="log-filters">
-        <div className="filter-section">
-          <label>Clusters ({selectedClusters.length} selected)</label>
-          <div className="cluster-selection">
-            <div className="cluster-buttons">
-              <button onClick={selectAllClusters} className="btn-sm">Select All</button>
-              <button onClick={deselectAllClusters} className="btn-sm">Clear</button>
-            </div>
-            <div className="cluster-checkboxes">
-              {clusters.map(cluster => (
-                <label key={cluster.id}>
-                  <input
-                    type="checkbox"
-                    checked={selectedClusters.includes(cluster.id)}
-                    onChange={() => toggleCluster(cluster.id)}
-                  />
-                  <span>{cluster.name}</span>
-                </label>
-              ))}
-            </div>
+      {/* Quick Filters Bar */}
+      <div className="quick-filters">
+        <div className="filter-group">
+          <label>Log Level:</label>
+          <div className="level-filters">
+            <button
+              className={`level-badge level-error ${levelFilter.includes('error') ? 'active' : ''}`}
+              onClick={() => toggleLevelFilter('error')}
+            >
+              ❌ Error <span className="count">{stats.error}</span>
+            </button>
+            <button
+              className={`level-badge level-warn ${levelFilter.includes('warn') ? 'active' : ''}`}
+              onClick={() => toggleLevelFilter('warn')}
+            >
+              ⚠️ Warn <span className="count">{stats.warn}</span>
+            </button>
+            <button
+              className={`level-badge level-info ${levelFilter.includes('info') ? 'active' : ''}`}
+              onClick={() => toggleLevelFilter('info')}
+            >
+              ℹ️ Info <span className="count">{stats.info}</span>
+            </button>
+            <button
+              className={`level-badge level-debug ${levelFilter.includes('debug') ? 'active' : ''}`}
+              onClick={() => toggleLevelFilter('debug')}
+            >
+              🔧 Debug <span className="count">{stats.debug}</span>
+            </button>
           </div>
         </div>
-
-        <div className="filter-section">
-          <label>Namespace (optional)</label>
-          <input
-            type="text"
-            value={namespace}
-            onChange={e => setNamespace(e.target.value)}
-            placeholder="Leave empty for all namespaces"
-          />
-        </div>
-
-        <div className="filter-section">
-          <label>Label Selector (optional)</label>
-          <input
-            type="text"
-            value={labelSelector}
-            onChange={e => setLabelSelector(e.target.value)}
-            placeholder="e.g., app=my-app"
-          />
-        </div>
-
-        <div className="filter-section">
-          <label>Tail Lines</label>
-          <select value={tailLines} onChange={e => setTailLines(Number(e.target.value))}>
-            <option value={50}>50 lines</option>
-            <option value={100}>100 lines</option>
-            <option value={200}>200 lines</option>
-            <option value={500}>500 lines</option>
-            <option value={1000}>1000 lines</option>
-          </select>
-        </div>
-
-        <div className="filter-section">
-          <label>Search Logs</label>
+        <div className="search-box">
           <input
             type="text"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Search in log messages..."
+            placeholder="🔍 Search logs (cluster, namespace, pod, or message)..."
+            className="search-input"
           />
-        </div>
-
-        <div className="filter-section">
-          <label>Level Filter</label>
-          <select value={levelFilter} onChange={e => setLevelFilter(e.target.value)}>
-            <option value="all">All Levels</option>
-            <option value="error">Errors Only</option>
-            <option value="warn">Warnings Only</option>
-            <option value="info">Info Only</option>
-          </select>
+          {searchTerm && (
+            <button className="clear-search" onClick={() => setSearchTerm('')}>✕</button>
+          )}
         </div>
       </div>
 
-      {error && <div className="error-message">{error}</div>}
+      {/* Collapsible Filters */}
+      <details className="advanced-filters" open>
+        <summary>⚙️ Advanced Filters</summary>
+        <div className="filters-grid">
+          <div className="filter-section">
+            <label>🎯 Clusters ({selectedClusters.length}/{clusters.length})</label>
+            <div className="cluster-pills">
+              {clusters.map(cluster => (
+                <button
+                  key={cluster.id}
+                  className={`cluster-pill ${selectedClusters.includes(cluster.id) ? 'active' : ''}`}
+                  onClick={() => {
+                    setSelectedClusters(prev =>
+                      prev.includes(cluster.id)
+                        ? prev.filter(id => id !== cluster.id)
+                        : [...prev, cluster.id]
+                    );
+                  }}
+                >
+                  {cluster.name}
+                </button>
+              ))}
+            </div>
+          </div>
 
-      <div className="log-stats">
-        <span>Total logs: {logs.length}</span>
-        <span>Filtered: {filteredLogs.length}</span>
-        {loading && <span className="loading-indicator">Loading...</span>}
+          <div className="filter-section">
+            <label>📦 Namespace</label>
+            <input
+              type="text"
+              value={namespace}
+              onChange={e => setNamespace(e.target.value)}
+              placeholder="flux-system, default, kube-system..."
+            />
+          </div>
+
+          <div className="filter-section">
+            <label>🏷️ Label Selector</label>
+            <input
+              type="text"
+              value={labelSelector}
+              onChange={e => setLabelSelector(e.target.value)}
+              placeholder="app=controller, tier=backend..."
+            />
+          </div>
+
+          <div className="filter-section">
+            <label>📜 Lines to Tail</label>
+            <select value={tailLines} onChange={e => setTailLines(Number(e.target.value))}>
+              <option value={50}>Last 50 lines</option>
+              <option value={100}>Last 100 lines</option>
+              <option value={200}>Last 200 lines</option>
+              <option value={500}>Last 500 lines</option>
+              <option value={1000}>Last 1000 lines</option>
+            </select>
+          </div>
+        </div>
+      </details>
+
+      {error && <div className="error-banner">{error}</div>}
+
+      {/* Results Summary */}
+      <div className="results-summary">
+        <span className="results-count">
+          📋 <strong>{filteredLogs.length}</strong> events {logs.length !== filteredLogs.length && `(filtered from ${logs.length})`}
+        </span>
+        {loading && <span className="loading-spinner">⏳ Loading...</span>}
+        {selectedClusters.length === 0 && (
+          <span className="warning-text">⚠️ Select at least one cluster</span>
+        )}
       </div>
 
-      <div className="log-container">
+      {/* Logs Display */}
+      <div className="logs-viewer">
         {filteredLogs.length === 0 && !loading && (
           <div className="no-logs">
-            {selectedClusters.length === 0
-              ? 'Select at least one cluster and click Refresh'
-              : 'No logs found matching the criteria'}
+            {selectedClusters.length === 0 ? (
+              <div>
+                <div className="empty-icon">🎯</div>
+                <h3>Select Clusters to Start</h3>
+                <p>Choose one or more clusters from the filters above and click Search</p>
+              </div>
+            ) : logs.length === 0 ? (
+              <div>
+                <div className="empty-icon">📭</div>
+                <h3>No Logs Found</h3>
+                <ul className="suggestions">
+                  <li>✓ Verify the namespace exists (current: <code>{namespace || 'all'}</code>)</li>
+                  <li>✓ Check label selector syntax</li>
+                  <li>✓ Ensure pods are running in the namespace</li>
+                  <li>✓ Try increasing tail lines or removing filters</li>
+                </ul>
+              </div>
+            ) : (
+              <div>
+                <div className="empty-icon">🔍</div>
+                <h3>No Matching Logs</h3>
+                <p>No logs match your search or filter criteria</p>
+                {searchTerm && <p>Search term: <code>{searchTerm}</code></p>}
+              </div>
+            )}
           </div>
         )}
-        
-        {filteredLogs.map((log, index) => {
-          const level = detectLogLevel(log.message);
-          return (
-            <div key={index} className={`log-entry log-${level}`}>
-              <div className="log-meta">
-                <span className="log-cluster">{log.cluster_name}</span>
-                <span className="log-namespace">{log.namespace}</span>
-                <span className="log-pod">{log.pod_name}</span>
-                <span className="log-container">{log.container}</span>
+
+        {viewMode === 'table' && filteredLogs.length > 0 && (
+          <div className="logs-table-container">
+            <table className="logs-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '40px' }}></th>
+                  <th style={{ width: '180px' }}>Time</th>
+                  <th style={{ width: '80px' }}>Level</th>
+                  <th style={{ width: '120px' }}>Cluster</th>
+                  <th style={{ width: '120px' }}>Namespace</th>
+                  <th style={{ width: '200px' }}>Pod</th>
+                  <th>Message</th>
+                  <th style={{ width: '60px' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLogs.map((log, index) => (
+                  <React.Fragment key={index}>
+                    <tr className={`log-row level-${log.level}`}>
+                      <td>
+                        <button
+                          className="expand-btn"
+                          onClick={() => toggleRowExpansion(index)}
+                          title={expandedRows.has(index) ? 'Collapse' : 'Expand'}
+                        >
+                          {expandedRows.has(index) ? '▼' : '▶'}
+                        </button>
+                      </td>
+                      <td className="timestamp">
+                        {log.parsedTime.toLocaleTimeString('en-US', { 
+                          hour12: false, 
+                          hour: '2-digit', 
+                          minute: '2-digit', 
+                          second: '2-digit'
+                        })}
+                      </td>
+                      <td>
+                        <span className={`level-indicator level-${log.level}`}>
+                          {log.level?.toUpperCase() || 'INFO'}
+                        </span>
+                      </td>
+                      <td className="cluster-cell" title={log.cluster_name}>
+                        {log.cluster_name}
+                      </td>
+                      <td className="namespace-cell" title={log.namespace}>
+                        {log.namespace}
+                      </td>
+                      <td className="pod-cell" title={log.pod_name}>
+                        {log.pod_name.length > 30 
+                          ? log.pod_name.substring(0, 27) + '...' 
+                          : log.pod_name}
+                      </td>
+                      <td className="message-cell">
+                        <div className="message-preview">
+                          {highlightSearch(
+                            log.message.length > 200 
+                              ? log.message.substring(0, 200) + '...' 
+                              : log.message
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <button
+                          className="action-btn"
+                          onClick={() => copyToClipboard(log.message)}
+                          title="Copy message"
+                        >
+                          📋
+                        </button>
+                      </td>
+                    </tr>
+                    {expandedRows.has(index) && (
+                      <tr className="expanded-row">
+                        <td></td>
+                        <td colSpan={7}>
+                          <div className="log-details">
+                            <div className="detail-section">
+                              <strong>Full Message:</strong>
+                              <pre className="log-message-full">{log.message}</pre>
+                            </div>
+                            <div className="detail-grid">
+                              <div className="detail-item">
+                                <span className="detail-label">Container:</span>
+                                <span className="detail-value">{log.container}</span>
+                              </div>
+                              <div className="detail-item">
+                                <span className="detail-label">Cluster ID:</span>
+                                <span className="detail-value">{log.cluster_id}</span>
+                              </div>
+                              <div className="detail-item">
+                                <span className="detail-label">Timestamp:</span>
+                                <span className="detail-value">{log.timestamp}</span>
+                              </div>
+                            </div>
+                            {Object.keys(log.fields).length > 0 && (
+                              <div className="detail-section">
+                                <strong>Extracted Fields:</strong>
+                                <div className="fields-grid">
+                                  {Object.entries(log.fields).map(([key, value]) => (
+                                    <div key={key} className="field-item">
+                                      <span className="field-key">{key}:</span>
+                                      <span className="field-value">{value}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {viewMode === 'raw' && filteredLogs.length > 0 && (
+          <div className="logs-raw-container">
+            {filteredLogs.map((log, index) => (
+              <div key={index} className={`log-raw-entry level-${log.level}`}>
+                <span className="log-time">{log.parsedTime.toISOString()}</span>
+                <span className={`log-level-badge level-${log.level}`}>{log.level?.toUpperCase()}</span>
+                <span className="log-source">[{log.cluster_name}/{log.namespace}/{log.pod_name}]</span>
+                <span className="log-raw-message">{highlightSearch(log.message)}</span>
               </div>
-              <div className="log-message">{log.message}</div>
-            </div>
-          );
-        })}
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
