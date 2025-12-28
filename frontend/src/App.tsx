@@ -17,9 +17,31 @@ const Sidebar: React.FC = () => {
   const location = useLocation();
   const { user, authEnabled, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
+  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+
+  const closeMobileMenu = () => {
+    setMobileMenuOpen(false);
+  };
 
   return (
-    <div className="sidebar">
+    <>
+      {/* Mobile Menu Toggle */}
+      <button 
+        className="mobile-menu-toggle"
+        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        aria-label="Toggle menu"
+      >
+        ☰
+      </button>
+
+      {/* Mobile Overlay */}
+      <div 
+        className={`mobile-overlay ${mobileMenuOpen ? 'active' : ''}`}
+        onClick={closeMobileMenu}
+      />
+
+      {/* Sidebar */}
+      <div className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
       <div className="sidebar-header">
         <div className="logo-container">
           <img src="/flux-logo.png" alt="Flux Logo" className="sidebar-logo" />
@@ -31,30 +53,35 @@ const Sidebar: React.FC = () => {
         <Link
           to="/"
           className={`nav-item ${location.pathname === '/' ? 'active' : ''}`}
+          onClick={closeMobileMenu}
         >
           Dashboard
         </Link>
         <Link
           to="/clusters"
           className={`nav-item ${location.pathname.startsWith('/clusters') ? 'active' : ''}`}
+          onClick={closeMobileMenu}
         >
           Clusters
         </Link>
         <Link
           to="/audit"
           className={`nav-item ${location.pathname === '/audit' ? 'active' : ''}`}
+          onClick={closeMobileMenu}
         >
           Audit
         </Link>
         <Link
           to="/logs"
           className={`nav-item ${location.pathname === '/logs' ? 'active' : ''}`}
+          onClick={closeMobileMenu}
         >
           Logs
         </Link>
         <Link
           to="/settings"
           className={`nav-item ${location.pathname === '/settings' ? 'active' : ''}`}
+          onClick={closeMobileMenu}
         >
           Settings
         </Link>
@@ -99,7 +126,8 @@ const Sidebar: React.FC = () => {
           </button>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 

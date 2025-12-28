@@ -799,6 +799,309 @@
   background: var(--border-hover);
 }
 
+/* ========================================
+   MOBILE RESPONSIVE STYLES
+   ======================================== */
+
+/* Tablet (max-width: 1024px) */
+@media (max-width: 1024px) {
+  .log-aggregation {
+    padding: 15px;
+  }
+
+  .quick-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-group {
+    width: 100%;
+  }
+
+  .level-filters {
+    flex-wrap: wrap;
+  }
+
+  .filters-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .logs-table th,
+  .logs-table td {
+    padding: 8px 6px;
+    font-size: 12px;
+  }
+}
+
+/* Tablet/Mobile (max-width: 768px) */
+@media (max-width: 768px) {
+  .log-aggregation {
+    padding: 10px;
+    height: auto;
+    min-height: calc(100vh - 80px);
+  }
+
+  /* Header adjustments */
+  .log-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .header-left {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .log-header h2 {
+    font-size: 20px;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .header-actions button {
+    flex: 1;
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  /* Quick filters mobile layout */
+  .quick-filters {
+    padding: 12px;
+  }
+
+  .level-badge {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+
+  .level-badge .count {
+    font-size: 10px;
+  }
+
+  .search-input {
+    font-size: 13px;
+    padding: 8px 35px 8px 12px;
+  }
+
+  /* Advanced filters */
+  .filters-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .cluster-pills {
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  /* Results summary */
+  .results-summary {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+    font-size: 13px;
+  }
+
+  /* Switch to card view on mobile instead of table */
+  .logs-table-container {
+    display: none;
+  }
+
+  .logs-viewer.mobile-cards {
+    display: block !important;
+  }
+
+  /* Mobile card-based log view */
+  .log-mobile-card {
+    background: var(--card-bg);
+    border-left: 4px solid;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 3px var(--card-shadow);
+  }
+
+  .log-mobile-card.level-error {
+    border-left-color: #dc3545;
+  }
+
+  .log-mobile-card.level-warn {
+    border-left-color: #ffc107;
+  }
+
+  .log-mobile-card.level-info {
+    border-left-color: #0dcaf0;
+  }
+
+  .log-mobile-card.level-debug {
+    border-left-color: #6c757d;
+  }
+
+  .log-mobile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .log-mobile-time {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: 'Courier New', monospace;
+  }
+
+  .log-mobile-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+    font-size: 11px;
+  }
+
+  .log-mobile-meta span {
+    background: var(--bg-tertiary);
+    padding: 3px 8px;
+    border-radius: 10px;
+    color: var(--text-secondary);
+  }
+
+  .log-mobile-message {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    word-break: break-word;
+  }
+
+  .log-mobile-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+  }
+
+  .log-mobile-actions button {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+
+  /* Raw view adjustments */
+  .logs-raw-container {
+    padding: 10px;
+    font-size: 11px;
+  }
+
+  .log-raw-entry {
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+    font-size: 12px;
+  }
+
+  .log-time,
+  .log-source {
+    font-size: 10px;
+  }
+
+  /* Empty states */
+  .no-logs {
+    padding: 40px 15px;
+  }
+
+  .empty-icon {
+    font-size: 48px;
+  }
+
+  .no-logs h3 {
+    font-size: 18px;
+  }
+
+  .suggestions li {
+    font-size: 13px;
+    padding: 6px 10px;
+  }
+}
+
+/* Small Mobile (max-width: 480px) */
+@media (max-width: 480px) {
+  .log-header h2 {
+    font-size: 18px;
+  }
+
+  .view-toggle button {
+    padding: 5px 12px;
+    font-size: 12px;
+  }
+
+  .header-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .header-actions button {
+    width: 100%;
+  }
+
+  .level-filters {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .level-badge {
+    justify-content: center;
+    font-size: 10px;
+    padding: 6px 8px;
+  }
+
+  .search-input {
+    font-size: 14px;
+  }
+
+  .log-mobile-card {
+    padding: 10px;
+  }
+
+  .log-mobile-message {
+    font-size: 12px;
+  }
+
+  .cluster-pill {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+
+  .results-summary {
+    font-size: 12px;
+  }
+}
+
+/* Landscape mobile optimization */
+@media (max-height: 500px) and (orientation: landscape) {
+  .log-aggregation {
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .logs-viewer {
+    max-height: 60vh;
+  }
+
+  .advanced-filters[open] .filters-grid {
+    max-height: 40vh;
+    overflow-y: auto;
+  }
+}
+
+
 .log-filters {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));

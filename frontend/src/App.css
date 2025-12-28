@@ -609,3 +609,174 @@ textarea.form-control {
   color: #4299e1;
   border-bottom-color: #4299e1;
 }
+/* ========================================
+   MOBILE RESPONSIVE STYLES
+   ======================================== */
+
+/* Mobile Menu Toggle */
+.mobile-menu-toggle {
+  display: none;
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  z-index: 1001;
+  background: var(--bg-sidebar);
+  border: none;
+  color: white;
+  font-size: 24px;
+  padding: 10px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.mobile-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+}
+
+/* Tablet & Mobile (max-width: 1024px) */
+@media (max-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .filters-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tablet (max-width: 768px) */
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    position: fixed;
+    left: -240px;
+    top: 0;
+    bottom: 0;
+    width: 240px;
+    z-index: 1000;
+    transition: left 0.3s ease;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .sidebar.mobile-open {
+    left: 0;
+  }
+
+  .mobile-menu-toggle {
+    display: block;
+  }
+
+  .mobile-overlay.active {
+    display: block;
+  }
+
+  .main-content {
+    width: 100%;
+    margin-left: 0;
+    padding-top: 60px;
+  }
+
+  .header {
+    padding: 15px 20px;
+  }
+
+  .header h2 {
+    font-size: 20px;
+  }
+
+  .content {
+    padding: 15px;
+  }
+
+  .header-actions {
+    flex-wrap: wrap;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card {
+    padding: 15px;
+  }
+
+  /* Make tables scrollable */
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  /* Stack filter sections */
+  .log-filters,
+  .filters-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Mobile (max-width: 480px) */
+@media (max-width: 480px) {
+  .sidebar-header h1 {
+    font-size: 18px;
+  }
+
+  .sidebar-logo {
+    width: 48px;
+    height: 48px;
+  }
+
+  .header h2 {
+    font-size: 18px;
+  }
+
+  .btn {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  .content {
+    padding: 10px;
+  }
+
+  .card {
+    padding: 12px;
+    margin-bottom: 15px;
+  }
+
+  .card h3 {
+    font-size: 16px;
+  }
+
+  /* Smaller text for mobile */
+  body {
+    font-size: 14px;
+  }
+
+  .nav-item {
+    padding: 10px 15px;
+    font-size: 14px;
+  }
+
+  /* Stack buttons vertically on small screens */
+  .header-actions,
+  .modal-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .header-actions button,
+  .modal-actions button {
+    width: 100%;
+  }
+}
