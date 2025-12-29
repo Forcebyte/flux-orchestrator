@@ -10,18 +10,18 @@ This directory contains the documentation for Flux Orchestrator, which is automa
 
 - `index.md` - Home page
 - `_config.yml` - Jekyll configuration
-- `QUICKSTART.md` - Quick start guide
-- `ARCHITECTURE.md` - Architecture overview
-- `DEVELOPMENT.md` - Development setup
+- `quickstart.md` - Quick start guide
+- `architecture.md` - Architecture overview
+- `development.md` - Development setup
 - `features.md` - Features landing page
-  - `RBAC.md` - Role-based access control
-  - `OAUTH.md` - OAuth authentication
-  - `AZURE_AKS.md` - Azure AKS integration
-  - `DIFF_VIEWER_AND_LOGS.md` - Diff viewer and log aggregation
-  - `MOBILE.md` - Mobile responsive design
+  - `rbac.md` - Role-based access control
+  - `oauth.md` - OAuth authentication
+  - `azure-aks.md` - Azure AKS integration
+  - `diff-viewer-and-logs.md` - Diff viewer and log aggregation
+  - `mobile.md` - Mobile responsive design
 - `operations.md` - Operations landing page
-  - `DATABASE.md` - Database configuration
-  - `ENCRYPTION.md` - Encryption setup
+  - `database.md` - Database configuration
+  - `encryption.md` - Encryption setup
 - `CONTRIBUTING.md` - Contributing guide
 
 ## 🛠️ Local Development

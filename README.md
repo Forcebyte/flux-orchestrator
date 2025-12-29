@@ -14,7 +14,7 @@
 
 ---
 
-[Try the Live Demo](DEMO.md) | [📖 Documentation](https://forcebyte.github.io/flux-orchestrator) | [Quick Start](#quick-start) | [Features](#features)
+[Try the Live Demo](demo.md) | [📖 Documentation](https://forcebyte.github.io/flux-orchestrator) | [Quick Start](#quick-start) | [Features](#features)
 
 ---
 
@@ -308,7 +308,7 @@ Flux Orchestrator supports optional OAuth authentication with GitHub and Microso
    ```
 3. **Restart Application**
 
-For detailed setup instructions, see **[docs/OAUTH.md](docs/OAUTH.md)**.
+For detailed setup instructions, see **[OAuth Authentication Guide](https://forcebyte.github.io/flux-orchestrator/oauth)**.
 
 
 ## Security
@@ -342,8 +342,6 @@ Flux Orchestrator implements multiple layers of security:
 - Weekly security patch scanning
 - Grouped minor/patch updates
 
-See [docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md) for the complete security audit report.
-
 ### Kubeconfig Encryption
 
 All kubeconfig data is encrypted at rest using **Fernet** (AES-128-CBC with HMAC-SHA256) before being stored in the database. This ensures that even with direct database access, the kubeconfig contents cannot be read without the encryption key.
@@ -356,7 +354,7 @@ All kubeconfig data is encrypted at rest using **Fernet** (AES-128-CBC with HMAC
 2. Set the `ENCRYPTION_KEY` environment variable
 3. Store the key securely (Kubernetes Secret, secrets manager, etc.)
 
-For more details, see [docs/ENCRYPTION.md](docs/ENCRYPTION.md).
+For more details, see [Encryption Guide](https://forcebyte.github.io/flux-orchestrator/encryption).
 
 ### User Access Control (RBAC)
 
@@ -436,7 +434,7 @@ Flux Orchestrator can automatically discover and manage AKS clusters using Azure
 
 Clusters imported from Azure will be marked with a ☁️ badge and can be managed like any other cluster.
 
-For detailed Azure integration documentation, see [docs/AZURE_AKS.md](docs/AZURE_AKS.md).
+For detailed Azure integration documentation, see [Azure AKS Integration](https://forcebyte.github.io/flux-orchestrator/azure-aks).
 
 ## Contributing
 

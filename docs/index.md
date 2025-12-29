@@ -100,7 +100,7 @@ npm install
 npm run dev:demo
 ```
 
-See [DEMO.md](https://github.com/Forcebyte/flux-orchestrator/blob/main/DEMO.md) for more information.
+See [demo.md](https://github.com/Forcebyte/flux-orchestrator/blob/main/demo.md) for more information.
 
 ## Documentation
 

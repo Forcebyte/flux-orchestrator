@@ -86,7 +86,7 @@ npm run dev
 
 ## Quick Deploy to Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/forcebyte/flux-orchestrator&env=VITE_DEMO_MODE&envDescription=Demo%20mode%20configuration&envLink=https://github.com/forcebyte/flux-orchestrator/blob/main/DEMO.md&project-name=flux-orchestrator-demo&repository-name=flux-orchestrator-demo)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/forcebyte/flux-orchestrator&env=VITE_DEMO_MODE&envDescription=Demo%20mode%20configuration&envLink=https://github.com/forcebyte/flux-orchestrator/blob/main/demo.md&project-name=flux-orchestrator-demo&repository-name=flux-orchestrator-demo)
 
 1. Click the "Deploy with Vercel" button above
 2. Set the environment variable `VITE_DEMO_MODE` to `true`
