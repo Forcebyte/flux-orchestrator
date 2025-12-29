@@ -1,4 +1,23 @@
+---
+layout: default
+title: Quick Start
+nav_order: 2
+description: "Get started with Flux Orchestrator in 5 minutes"
+---
+
 # Quick Start Guide
+{: .no_toc }
+
+Get Flux Orchestrator up and running in 5 minutes.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
+
+---
 
 Get Flux Orchestrator up and running in minutes!
 

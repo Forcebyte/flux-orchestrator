@@ -1,4 +1,26 @@
+---
+layout: default
+title: RBAC
+nav_order: 5
+parent: Features
+description: "Role-Based Access Control configuration and management"
+---
+
 # Role-Based Access Control (RBAC)
+{: .no_toc }
+
+Configure granular permissions and roles.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
+
+---
+
+# Role-Based Access Control (RBAC) Overview
 
 Flux Orchestrator includes a comprehensive RBAC system to control user access to clusters, resources, and administrative functions.
 

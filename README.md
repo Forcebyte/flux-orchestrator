@@ -7,12 +7,14 @@
 <p><i>A comprehensive multi-cluster GitOps management platform for Flux CD</i></p>
 
 [![View the Demo Site](https://img.shields.io/badge/view%20the%20demo-8A2BE2)](https://flux-orchestrator-demo.vercel.app)
+[![Documentation](https://img.shields.io/badge/docs-github%20pages-blue)](https://forcebyte.github.io/flux-orchestrator)
+[![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 
 </div>
 
 ---
 
-[Try the Live Demo](DEMO.md) | [Documentation](docs/) | [Quick Start](#quick-start) | [Features](#features)
+[Try the Live Demo](DEMO.md) | [📖 Documentation](https://forcebyte.github.io/flux-orchestrator) | [Quick Start](#quick-start) | [Features](#features)
 
 ---
 

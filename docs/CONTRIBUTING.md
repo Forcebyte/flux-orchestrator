@@ -1,4 +1,25 @@
+---
+layout: default
+title: Contributing
+nav_order: 13
+description: "How to contribute to Flux Orchestrator"
+---
+
 # Contributing to Flux Orchestrator
+{: .no_toc }
+
+Learn how to contribute to the project.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
+
+---
+
+# Contributing Overview
 
 Thank you for your interest in contributing to Flux Orchestrator! This document provides guidelines and information for contributors.
 

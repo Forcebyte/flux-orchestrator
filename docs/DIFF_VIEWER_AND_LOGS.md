@@ -1,3 +1,25 @@
+---
+layout: default
+title: Diff Viewer & Logs
+nav_order: 8
+parent: Features
+description: "YAML diff viewer and log aggregation tools"
+---
+
+# Resource Diff Viewer & Log Aggregation
+{: .no_toc }
+
+Advanced debugging with diff viewer and log aggregation.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
+
+---
+
 # Resource Diff Viewer & Log Aggregation
 
 ## Overview

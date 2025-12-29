@@ -1,4 +1,25 @@
-# Architecture Overview
+---
+layout: default
+title: Architecture
+nav_order: 3
+description: "System architecture and design of Flux Orchestrator"
+---
+
+# Architecture
+{: .no_toc }
+
+System architecture and design overview.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
+
+---
+
+# Architecture Overview Overview
 
 ## System Architecture
 

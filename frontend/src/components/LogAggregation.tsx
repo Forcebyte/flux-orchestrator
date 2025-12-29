@@ -39,6 +39,13 @@ const LogAggregation: React.FC = () => {
     loadClusters();
   }, []);
 
+  // Auto-load logs when clusters are selected
+  useEffect(() => {
+    if (selectedClusters.length > 0) {
+      loadLogs();
+    }
+  }, [selectedClusters]);
+
   useEffect(() => {
     if (autoRefresh) {
       const interval = setInterval(() => {

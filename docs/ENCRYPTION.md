@@ -1,3 +1,25 @@
+---
+layout: default
+title: Encryption
+nav_order: 11
+parent: Operations
+description: "Fernet encryption for secrets and kubeconfig"
+---
+
+# Kubeconfig Encryption
+{: .no_toc }
+
+Fernet encryption for sensitive data.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
+
+---
+
 # Kubeconfig Encryption
 
 Flux Orchestrator uses Fernet symmetric encryption to protect kubeconfig data stored in the database. This ensures that anyone with direct database access cannot read the kubeconfig contents without the encryption key.

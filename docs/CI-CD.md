@@ -1,4 +1,26 @@
+---
+layout: default
+title: CI/CD
+nav_order: 12
+parent: Operations
+description: "Automated build and deployment pipelines"
+---
+
 # CI/CD Pipeline
+{: .no_toc }
+
+Automated testing and deployment workflows.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
+
+---
+
+# CI/CD Pipeline Overview
 
 Flux Orchestrator uses GitHub Actions for continuous integration and delivery.
 

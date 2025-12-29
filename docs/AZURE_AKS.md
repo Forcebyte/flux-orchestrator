@@ -1,4 +1,26 @@
+---
+layout: default
+title: Azure AKS
+nav_order: 7
+parent: Features
+description: "Azure AKS cluster discovery and management"
+---
+
 # Azure AKS Integration
+{: .no_toc }
+
+Automatic discovery and registration of AKS clusters.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
+
+---
+
+# Azure AKS Integration Overview
 
 Flux Orchestrator now supports automatic discovery and management of Azure AKS clusters using Azure Service Principal authentication.
 

@@ -1,4 +1,26 @@
-# OAuth Authentication Setup Guide
+---
+layout: default
+title: OAuth Authentication
+nav_order: 6
+parent: Features
+description: "GitHub and Microsoft Entra ID OAuth integration"
+---
+
+# OAuth Authentication
+{: .no_toc }
+
+Configure GitHub and Microsoft Entra ID authentication.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
+
+---
+
+# OAuth Authentication Overview Setup Guide
 
 Flux Orchestrator supports optional OAuth authentication via GitHub or Microsoft Entra (Azure AD). This guide walks through the setup process for both providers.
 

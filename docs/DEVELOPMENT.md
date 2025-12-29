@@ -1,3 +1,24 @@
+---
+layout: default
+title: Development
+nav_order: 4
+description: "Local development setup and guidelines"
+---
+
+# Development Guide
+{: .no_toc }
+
+Set up your local development environment.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
+
+---
+
 # Development Guide
 
 ## Prerequisites
