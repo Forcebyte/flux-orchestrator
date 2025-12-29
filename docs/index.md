@@ -121,7 +121,6 @@ See [DEMO.md](https://github.com/Forcebyte/flux-orchestrator/blob/main/DEMO.md) 
 ### Operations
 - [Database Setup](database) - PostgreSQL & MySQL configuration
 - [Encryption](encryption) - Fernet key management
-- [CI/CD](ci-cd) - Automated deployment pipelines
 
 ### Contributing
 - [Contributing Guide](contributing) - How to contribute to the project

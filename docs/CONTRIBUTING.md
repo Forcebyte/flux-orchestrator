@@ -2,6 +2,7 @@
 layout: default
 title: Contributing
 nav_order: 13
+permalink: /contributing
 description: "How to contribute to Flux Orchestrator"
 ---
 

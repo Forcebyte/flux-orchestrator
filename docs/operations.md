@@ -3,6 +3,7 @@ layout: default
 title: Operations
 nav_order: 10
 has_children: true
+permalink: /operations
 description: "Operational guides for Flux Orchestrator"
 ---
 
@@ -20,4 +21,3 @@ Learn how to deploy, configure, and maintain Flux Orchestrator:
 
 - **[Database](database)** - PostgreSQL and MySQL setup
 - **[Encryption](encryption)** - Fernet key management for secrets
-- **[CI/CD](ci-cd)** - Automated deployment pipelines

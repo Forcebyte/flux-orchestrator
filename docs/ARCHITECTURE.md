@@ -2,6 +2,7 @@
 layout: default
 title: Architecture
 nav_order: 3
+permalink: /architecture
 description: "System architecture and design of Flux Orchestrator"
 ---
 

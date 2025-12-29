@@ -2,6 +2,7 @@
 layout: default
 title: Quick Reference
 nav_order: 14
+permalink: /quickreference
 description: "Quick reference for common tasks"
 ---
 

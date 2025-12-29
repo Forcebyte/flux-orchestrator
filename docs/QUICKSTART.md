@@ -2,6 +2,7 @@
 layout: default
 title: Quick Start
 nav_order: 2
+permalink: /quickstart
 description: "Get started with Flux Orchestrator in 5 minutes"
 ---
 

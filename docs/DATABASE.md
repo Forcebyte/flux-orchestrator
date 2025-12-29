@@ -1,8 +1,9 @@
 ---
 layout: default
 title: Database
-nav_order: 10
+nav_order: 1
 parent: Operations
+permalink: /database
 description: "PostgreSQL and MySQL configuration"
 ---
 

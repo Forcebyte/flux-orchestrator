@@ -1,8 +1,9 @@
 ---
 layout: default
 title: Mobile Support
-nav_order: 9
+nav_order: 5
 parent: Features
+permalink: /mobile
 description: "Mobile responsive design and touch optimization"
 ---
 
@@ -22,7 +23,7 @@ Mobile-optimized interface with touch support.
 
 # Mobile Responsive Design Overview
 
-Flux Orchestrator now includes comprehensive mobile and tablet support, allowing you to manage your Flux clusters from any device.
+Flux Orchestrator provides comprehensive mobile and tablet support, allowing cluster management from any device.
 
 ## Features
 

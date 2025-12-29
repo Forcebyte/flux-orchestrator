@@ -1,8 +1,9 @@
 ---
 layout: default
 title: Azure AKS
-nav_order: 7
+nav_order: 3
 parent: Features
+permalink: /azure-aks
 description: "Azure AKS cluster discovery and management"
 ---
 

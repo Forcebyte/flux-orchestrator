@@ -1,8 +1,9 @@
 ---
 layout: default
 title: Encryption
-nav_order: 11
+nav_order: 2
 parent: Operations
+permalink: /encryption
 description: "Fernet encryption for secrets and kubeconfig"
 ---
 

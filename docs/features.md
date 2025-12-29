@@ -3,6 +3,7 @@ layout: default
 title: Features
 nav_order: 5
 has_children: true
+permalink: /features
 description: "Key features of Flux Orchestrator"
 ---
 

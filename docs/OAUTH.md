@@ -1,8 +1,9 @@
 ---
 layout: default
 title: OAuth Authentication
-nav_order: 6
+nav_order: 2
 parent: Features
+permalink: /oauth
 description: "GitHub and Microsoft Entra ID OAuth integration"
 ---
 

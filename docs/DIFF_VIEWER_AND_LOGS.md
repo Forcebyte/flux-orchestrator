@@ -1,8 +1,9 @@
 ---
 layout: default
 title: Diff Viewer & Logs
-nav_order: 8
+nav_order: 4
 parent: Features
+permalink: /diff-viewer-and-logs
 description: "YAML diff viewer and log aggregation tools"
 ---
 
@@ -24,7 +25,7 @@ Advanced debugging with diff viewer and log aggregation.
 
 ## Overview
 
-This document describes two new debugging and observability features added to Flux Orchestrator:
+Flux Orchestrator provides powerful debugging and observability capabilities:
 
 1. **Resource Diff Viewer**: Compare desired vs actual state for Flux resources
 2. **Log Aggregation**: Centralized multi-cluster log collection and viewing

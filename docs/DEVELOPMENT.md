@@ -2,6 +2,7 @@
 layout: default
 title: Development
 nav_order: 4
+permalink: /development
 description: "Local development setup and guidelines"
 ---
 

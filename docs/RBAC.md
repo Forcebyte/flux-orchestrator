@@ -1,8 +1,9 @@
 ---
 layout: default
 title: RBAC
-nav_order: 5
+nav_order: 1
 parent: Features
+permalink: /rbac
 description: "Role-Based Access Control configuration and management"
 ---
 

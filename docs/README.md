@@ -22,7 +22,6 @@ This directory contains the documentation for Flux Orchestrator, which is automa
 - `operations.md` - Operations landing page
   - `DATABASE.md` - Database configuration
   - `ENCRYPTION.md` - Encryption setup
-  - `CI-CD.md` - CI/CD pipelines
 - `CONTRIBUTING.md` - Contributing guide
 
 ## 🛠️ Local Development
