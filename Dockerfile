@@ -25,7 +25,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go build -ldflags="-s -w" -trimpath -o /flux-orchestrator ./backend/cmd/server
 
 # Frontend builder
-FROM node:20-alpine AS frontend-builder
+FROM node:25-alpine AS frontend-builder
 WORKDIR /app
 
 # Copy package files
