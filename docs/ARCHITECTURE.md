@@ -24,51 +24,44 @@ System architecture and design overview.
 
 ## System Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         User Browser                             │
-│                     (React Frontend UI)                          │
-└─────────────────────┬───────────────────────────────────────────┘
-                      │ HTTP/HTTPS
-                      │ REST API Calls
-                      ▼
-┌─────────────────────────────────────────────────────────────────┐
-│               Flux Orchestrator Backend (Go)                     │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │  HTTP Server (Gorilla Mux)                                │  │
-│  │  - Cluster Management APIs                                │  │
-│  │  - Resource Discovery APIs                                │  │
-│  │  - Reconciliation Trigger APIs                            │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                             │                                    │
-│  ┌──────────────────────────┼────────────────────────────┐     │
-│  │                           │                             │     │
-│  ▼                           ▼                             ▼     │
-│  ┌──────────────┐  ┌──────────────────┐  ┌──────────────────┐ │
-│  │  PostgreSQL  │  │  K8s Multi-Client │  │  Sync Worker     │ │
-│  │  Database    │  │  Manager          │  │  (Background)    │ │
-│  │              │  │                   │  │                  │ │
-│  │  - Clusters  │  │  - Dynamic        │  │  - Periodic Sync │ │
-│  │  - Resources │  │    Clients        │  │  - Health Check  │ │
-│  │  - State     │  │  - Multi-Cluster  │  │  - Auto-Refresh  │ │
-│  └──────────────┘  └──────────────────┘  └──────────────────┘ │
-└─────────────────────────────│───────────────────────────────────┘
-                              │ Kubernetes API
-                              │ (via kubeconfig)
-            ┌─────────────────┼─────────────────┐
-            │                 │                 │
-            ▼                 ▼                 ▼
-  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
-  │  Cluster 1       │ │  Cluster 2       │ │  Cluster N       │
-  │  ┌────────────┐  │ │  ┌────────────┐  │ │  ┌────────────┐  │
-  │  │ Flux CRDs  │  │ │  │ Flux CRDs  │  │ │  │ Flux CRDs  │  │
-  │  │            │  │ │  │            │  │ │  │            │  │
-  │  │ - Kustomiz.│  │ │  │ - Kustomiz.│  │ │  │ - Kustomiz.│  │
-  │  │ - HelmRel. │  │ │  │ - HelmRel. │  │ │  │ - HelmRel. │  │
-  │  │ - GitRepo  │  │ │  │ - GitRepo  │  │ │  │ - GitRepo  │  │
-  │  │ - HelmRepo │  │ │  │ - HelmRepo │  │ │  │ - HelmRepo │  │
-  │  └────────────┘  │ │  └────────────┘  │ │  └────────────┘  │
-  └──────────────────┘ └──────────────────┘ └──────────────────┘
+```mermaid
+graph TB
+    subgraph "User Layer"
+        Browser[User Browser<br/>React Frontend UI]
+    end
+    
+    subgraph "Flux Orchestrator Backend"
+        API[HTTP Server - Gorilla Mux<br/>• Cluster Management APIs<br/>• Resource Discovery APIs<br/>• Reconciliation Trigger APIs]
+        DB[(PostgreSQL/MySQL<br/>Database<br/>• Clusters<br/>• Resources<br/>• State)]
+        K8sClient[K8s Multi-Client Manager<br/>• Dynamic Clients<br/>• Multi-Cluster Support]
+        Worker[Sync Worker<br/>Background Tasks<br/>• Periodic Sync<br/>• Health Check<br/>• Auto-Refresh]
+    end
+    
+    subgraph "Kubernetes Clusters"
+        C1[Cluster 1<br/>Flux CRDs:<br/>• Kustomizations<br/>• HelmReleases<br/>• GitRepositories<br/>• HelmRepositories]
+        C2[Cluster 2<br/>Flux CRDs:<br/>• Kustomizations<br/>• HelmReleases<br/>• GitRepositories<br/>• HelmRepositories]
+        CN[Cluster N<br/>Flux CRDs:<br/>• Kustomizations<br/>• HelmReleases<br/>• GitRepositories<br/>• HelmRepositories]
+    end
+    
+    Browser -->|HTTP/HTTPS<br/>REST API| API
+    API --> DB
+    API --> K8sClient
+    API --> Worker
+    K8sClient -->|Kubernetes API<br/>via kubeconfig| C1
+    K8sClient -->|Kubernetes API<br/>via kubeconfig| C2
+    K8sClient -->|Kubernetes API<br/>via kubeconfig| CN
+    Worker -->|Kubernetes API<br/>via kubeconfig| C1
+    Worker -->|Kubernetes API<br/>via kubeconfig| C2
+    Worker -->|Kubernetes API<br/>via kubeconfig| CN
+    
+    style Browser fill:#e1f5ff
+    style API fill:#fff4e1
+    style DB fill:#e8f5e9
+    style K8sClient fill:#f3e5f5
+    style Worker fill:#fff3e0
+    style C1 fill:#fce4ec
+    style C2 fill:#fce4ec
+    style CN fill:#fce4ec
 ```
 
 ## Component Details
