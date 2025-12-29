@@ -328,12 +328,12 @@ code {
 }
 
 .dark-mode .btn-danger {
-  background: #c53030;
+  background: #e53e3e;
   color: white;
 }
 
 .dark-mode .btn-danger:hover {
-  background: #e53e3e;
+  background: #fc8181;
 }
 
 /* Dark mode status badges in App.css */

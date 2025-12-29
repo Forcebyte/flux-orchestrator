@@ -214,7 +214,7 @@ export const demoExportApi = {
     mockResponse(new Blob(['mock export data'], { type: 'application/json' })),
 };
 export const demoLogsApi = {
-  getAggregatedLogs: (params: URLSearchParams) => {
+  getAggregatedLogs: async (params: URLSearchParams) => {
     const clusterIds = params.getAll('cluster_id');
     const namespace = params.get('namespace');
     const labelSelector = params.get('label_selector');

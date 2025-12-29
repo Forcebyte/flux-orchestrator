@@ -192,7 +192,7 @@ export const rbacApi = {
 
 export const logsApi = IS_DEMO_MODE ? demoLogsApi : {
   getAggregatedLogs: (params: URLSearchParams) =>
-    api.get(`/api/logs?${params.toString()}`),
+    api.get(`/logs/aggregated?${params.toString()}`),
 };
 
 export default api;
