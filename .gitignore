@@ -42,3 +42,4 @@ Thumbs.db
 # Build outputs
 build/
 dist/
+backend/server

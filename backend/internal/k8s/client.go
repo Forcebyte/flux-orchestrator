@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/Forcebyte/flux-orchestrator/backend/internal/models"
@@ -23,14 +25,24 @@ type Client struct {
 	clients       map[string]dynamic.Interface
 	typedClients  map[string]*kubernetes.Clientset
 	configs       map[string]*rest.Config
+	timeout       time.Duration
 }
 
 // NewClient creates a new multi-cluster Kubernetes client
 func NewClient() *Client {
+	// Get timeout from env or default to 30 seconds
+	timeout := 30 * time.Second
+	if timeoutStr := os.Getenv("K8S_REQUEST_TIMEOUT_SECONDS"); timeoutStr != "" {
+		if val, err := strconv.Atoi(timeoutStr); err == nil && val > 0 {
+			timeout = time.Duration(val) * time.Second
+		}
+	}
+	
 	return &Client{
 		clients:      make(map[string]dynamic.Interface),
 		typedClients: make(map[string]*kubernetes.Clientset),
 		configs:      make(map[string]*rest.Config),
+		timeout:      timeout,
 	}
 }
 
@@ -40,6 +52,9 @@ func (c *Client) AddCluster(clusterID, kubeconfig string) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse kubeconfig: %w", err)
 	}
+	
+	// Set timeouts on the config
+	config.Timeout = c.timeout
 
 	client, err := dynamic.NewForConfig(config)
 	if err != nil {
@@ -63,6 +78,9 @@ func (c *Client) AddInClusterConfig(clusterID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get in-cluster config: %w", err)
 	}
+	
+	// Set timeouts on the config
+	config.Timeout = c.timeout
 
 	client, err := dynamic.NewForConfig(config)
 	if err != nil {
@@ -96,7 +114,7 @@ func (c *Client) CheckClusterHealth(clusterID string) (string, error) {
 		return "unknown", err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
 	// Try to list namespaces as a health check
@@ -1187,4 +1205,177 @@ containers = append(containers, container.Name)
 }
 
 return containers, nil
+}
+// GetResourceManifest gets the full manifest of a resource
+func (c *Client) GetResourceManifest(ctx context.Context, clusterID, kind, namespace, name string) (map[string]interface{}, error) {
+	client, ok := c.clients[clusterID]
+	if !ok {
+		return nil, fmt.Errorf("cluster %s not found", clusterID)
+	}
+
+	gvr, err := c.getGVRForKind(kind)
+	if err != nil {
+		return nil, err
+	}
+
+	var resource *unstructured.Unstructured
+	if namespace != "" {
+		resource, err = client.Resource(gvr).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	} else {
+		resource, err = client.Resource(gvr).Get(ctx, name, metav1.GetOptions{})
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get resource: %w", err)
+	}
+
+	return resource.Object, nil
+}
+
+// GetResourceDiff compares desired state (from Git) with actual state
+func (c *Client) GetResourceDiff(ctx context.Context, clusterID, kind, namespace, name string) (map[string]interface{}, error) {
+	// Get actual resource from cluster
+	actual, err := c.GetResourceManifest(ctx, clusterID, kind, namespace, name)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract spec and status for comparison
+	result := map[string]interface{}{
+		"actual": actual,
+	}
+
+	// Try to get the desired state from the kustomization or helm source
+	// This is a simplified version - in production you'd fetch from Git
+	if spec, ok := actual["spec"]; ok {
+		result["desired"] = map[string]interface{}{
+			"spec": spec,
+		}
+	}
+
+	// Add status for context
+	if status, ok := actual["status"]; ok {
+		result["status"] = status
+	}
+
+	return result, nil
+}
+
+// AggregatedLogEntry represents a log entry from a pod
+type AggregatedLogEntry struct {
+	Timestamp   string `json:"timestamp"`
+	ClusterID   string `json:"cluster_id"`
+	ClusterName string `json:"cluster_name"`
+	Namespace   string `json:"namespace"`
+	PodName     string `json:"pod_name"`
+	Container   string `json:"container"`
+	Message     string `json:"message"`
+	Level       string `json:"level,omitempty"`
+}
+
+// GetAggregatedLogs retrieves logs from multiple pods/containers across clusters
+func (c *Client) GetAggregatedLogs(ctx context.Context, filters map[string]interface{}) ([]AggregatedLogEntry, error) {
+	var logs []AggregatedLogEntry
+	
+	clusterIDs, _ := filters["cluster_ids"].([]string)
+	namespace, _ := filters["namespace"].(string)
+	labelSelector, _ := filters["label_selector"].(string)
+	tailLines := int64(100)
+	if tl, ok := filters["tail_lines"].(int64); ok && tl > 0 {
+		tailLines = tl
+	}
+
+	// If no cluster IDs specified, use all
+	if len(clusterIDs) == 0 {
+		for id := range c.typedClients {
+			clusterIDs = append(clusterIDs, id)
+		}
+	}
+
+	// Get logs from each cluster
+	for _, clusterID := range clusterIDs {
+		typedClient, ok := c.typedClients[clusterID]
+		if !ok {
+			continue
+		}
+
+		// List pods matching criteria
+		var pods *corev1.PodList
+		var err error
+		
+		listOptions := metav1.ListOptions{
+			LabelSelector: labelSelector,
+		}
+
+		if namespace != "" {
+			pods, err = typedClient.CoreV1().Pods(namespace).List(ctx, listOptions)
+		} else {
+			pods, err = typedClient.CoreV1().Pods("").List(ctx, listOptions)
+		}
+
+		if err != nil {
+			continue
+		}
+
+		// Get logs from each pod
+		for _, pod := range pods.Items {
+			for _, container := range pod.Spec.Containers {
+				podLogOpts := &corev1.PodLogOptions{
+					Container: container.Name,
+					TailLines: &tailLines,
+				}
+
+				req := typedClient.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, podLogOpts)
+				podLogs, err := req.Stream(ctx)
+				if err != nil {
+					continue
+				}
+
+				buf := make([]byte, 100*1024) // 100KB per container
+				n, _ := podLogs.Read(buf)
+				podLogs.Close()
+
+				if n > 0 {
+					logText := string(buf[:n])
+					// Simple line splitting
+					lines := splitLines(logText)
+					for _, line := range lines {
+						if line != "" {
+							entry := AggregatedLogEntry{
+								Timestamp:   time.Now().Format(time.RFC3339),
+								ClusterID:   clusterID,
+								Namespace:   pod.Namespace,
+								PodName:     pod.Name,
+								Container:   container.Name,
+								Message:     line,
+							}
+							logs = append(logs, entry)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return logs, nil
+}
+
+// Helper function to split log text into lines
+func splitLines(text string) []string {
+	var lines []string
+	current := ""
+	for _, ch := range text {
+		if ch == '\n' {
+			if current != "" {
+				lines = append(lines, current)
+				current = ""
+			}
+		} else {
+			current += string(ch)
+		}
+	}
+	if current != "" {
+		lines = append(lines, current)
+	}
+	return lines
 }

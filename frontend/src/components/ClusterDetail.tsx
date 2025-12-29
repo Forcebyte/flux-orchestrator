@@ -7,6 +7,7 @@ import Toast from './Toast';
 import ResourceTree from './ResourceTree';
 import FluxResourceEditDialog from './FluxResourceEditDialog';
 import KustomizationDetail from './KustomizationDetail';
+import ResourceDiffViewer from './ResourceDiffViewer';
 import '../styles/ClusterDetail.css';
 
 const ClusterDetail: React.FC = () => {
@@ -23,6 +24,7 @@ const ClusterDetail: React.FC = () => {
   const [isSuspending, setIsSuspending] = useState<Set<string>>(new Set());
   const [editingResource, setEditingResource] = useState<FluxResource | null>(null);
   const [kustomizationDetail, setKustomizationDetail] = useState<{ namespace: string; name: string } | null>(null);
+  const [viewingDiff, setViewingDiff] = useState<{ kind: string; namespace: string; name: string } | null>(null);
   const { toasts, removeToast, success, error, info } = useToast();
 
   useEffect(() => {
@@ -482,6 +484,12 @@ const ClusterDetail: React.FC = () => {
                                         {isReconcilingNow ? 'Reconciling...' : '↻ Reconcile'}
                                       </button>
                                       <button
+                                        className="btn btn-sm btn-secondary"
+                                        onClick={() => setViewingDiff({ kind: resource.kind, namespace: resource.namespace, name: resource.name })}
+                                      >
+                                        🔍 View Diff
+                                      </button>
+                                      <button
                                         className={`btn btn-sm btn-warning ${isSuspendingNow ? 'btn-loading' : ''}`}
                                         onClick={() => handleSuspend(resource)}
                                         disabled={isSuspendingNow}
@@ -581,6 +589,16 @@ const ClusterDetail: React.FC = () => {
           namespace={kustomizationDetail.namespace}
           name={kustomizationDetail.name}
           onClose={() => setKustomizationDetail(null)}
+        />
+      )}
+
+      {viewingDiff && id && (
+        <ResourceDiffViewer
+          clusterId={id}
+          kind={viewingDiff.kind}
+          namespace={viewingDiff.namespace}
+          name={viewingDiff.name}
+          onClose={() => setViewingDiff(null)}
         />
       )}
     </div>

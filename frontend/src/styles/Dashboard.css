@@ -167,8 +167,10 @@
 }
 
 .stat-trend {
-  font-size: 12px;
-  color: var(--text-secondary);
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-top: 4px;
 }
 
 /* Health Overview */

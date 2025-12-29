@@ -148,3 +148,53 @@ type ReconcileRequest struct {
 	Name      string `json:"name"`
 	Namespace string `json:"namespace"`
 }
+
+// User represents a user in the system
+type User struct {
+	ID        string    `json:"id" gorm:"primaryKey;size:100"`
+	Email     string    `json:"email" gorm:"size:255;uniqueIndex;not null"`
+	Name      string    `json:"name" gorm:"size:255"`
+	Provider  string    `json:"provider" gorm:"size:50"` // github, entra, local
+	Enabled   bool      `json:"enabled" gorm:"default:true"`
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+	
+	// Relationships
+	Roles []Role `json:"roles" gorm:"many2many:user_roles;"`
+}
+
+// Role represents a role with a set of permissions
+type Role struct {
+	ID          string    `json:"id" gorm:"primaryKey;size:100"`
+	Name        string    `json:"name" gorm:"size:100;uniqueIndex;not null"`
+	Description string    `json:"description" gorm:"type:text"`
+	BuiltIn     bool      `json:"built_in" gorm:"default:false"` // Built-in roles can't be deleted
+	CreatedAt   time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt   time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+	
+	// Relationships
+	Permissions []Permission `json:"permissions" gorm:"many2many:role_permissions;"`
+}
+
+// Permission represents a specific permission
+type Permission struct {
+	ID          string    `json:"id" gorm:"primaryKey;size:100"`
+	Resource    string    `json:"resource" gorm:"size:50;not null;uniqueIndex:idx_resource_action"` // cluster, kustomization, helmrelease, setting, user, role
+	Action      string    `json:"action" gorm:"size:50;not null;uniqueIndex:idx_resource_action"` // read, create, update, delete, reconcile, suspend, resume
+	Description string    `json:"description" gorm:"type:text"`
+	CreatedAt   time.Time `json:"created_at" gorm:"autoCreateTime"`
+}
+
+// UserRole represents the many-to-many relationship between users and roles
+type UserRole struct {
+	UserID    string    `json:"user_id" gorm:"primaryKey;size:100"`
+	RoleID    string    `json:"role_id" gorm:"primaryKey;size:100"`
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
+}
+
+// RolePermission represents the many-to-many relationship between roles and permissions
+type RolePermission struct {
+	RoleID       string    `json:"role_id" gorm:"primaryKey;size:100"`
+	PermissionID string    `json:"permission_id" gorm:"primaryKey;size:100"`
+	CreatedAt    time.Time `json:"created_at" gorm:"autoCreateTime"`
+}

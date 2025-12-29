@@ -1,4 +1,23 @@
+---
+layout: default
+title: Quick Start
+nav_order: 2
+description: "Get started with Flux Orchestrator in 5 minutes"
+---
+
 # Quick Start Guide
+{: .no_toc }
+
+Get Flux Orchestrator up and running in 5 minutes.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
+
+---
 
 Get Flux Orchestrator up and running in minutes!
 
@@ -47,6 +66,8 @@ Get Flux Orchestrator up and running in minutes!
    **For PostgreSQL:**
    ```bash
    export DB_DRIVER=postgres
+   export ENCRYPTION_KEY=$(python3 -c "import base64; import os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())")
+   export ENV=development  # Optional: human-readable logs
    make backend-dev
    ```
 
@@ -187,6 +208,7 @@ Once the application is running:
 ### Backend won't start
 - Check PostgreSQL is running: `docker ps | grep postgres`
 - Check port 8080 is available: `lsof -i :8080`
+- Verify ENCRYPTION_KEY is set
 
 ### Frontend won't start
 - Check Node.js version: `node --version` (should be 18+)
@@ -197,6 +219,40 @@ Once the application is running:
 - Verify kubeconfig is valid: `kubectl --kubeconfig=<path> get nodes`
 - Check network connectivity to cluster API
 - Ensure cluster has Flux installed: `kubectl get crd | grep flux`
+
+### Check Service Health
+```bash
+# Basic health check
+curl http://localhost:8080/health
+
+# Detailed readiness (checks database and K8s client)
+curl http://localhost:8080/readiness
+```
+
+If readiness check fails, it will show which dependency is unavailable.
+
+## Monitoring Your Deployment
+
+### Logs
+
+View application logs in real-time. Set `ENV=development` for human-readable format:
+```bash
+ENV=development go run backend/cmd/server/main.go
+```
+
+### Metrics
+
+View Prometheus metrics at http://localhost:8080/metrics
+
+Useful for monitoring:
+- Request rates and latencies
+- Cluster health status
+- Resource sync performance
+- Database query performance
+
+### API Documentation
+
+Swagger UI available at http://localhost:8080/swagger/index.html
 
 ## Next Steps
 

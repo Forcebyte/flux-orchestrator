@@ -1,3 +1,25 @@
+---
+layout: default
+title: Database
+nav_order: 10
+parent: Operations
+description: "PostgreSQL and MySQL configuration"
+---
+
+# Database Support
+{: .no_toc }
+
+Configure PostgreSQL or MySQL for Flux Orchestrator.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
+
+---
+
 # Database Support
 
 Flux Orchestrator supports both PostgreSQL and MySQL as database backends.

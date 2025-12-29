@@ -9,6 +9,7 @@ import {
   demoActivityApi,
   demoOAuthApi,
   demoExportApi,
+  demoLogsApi,
 } from './demoApi';
 
 const API_BASE = '/api/v1';
@@ -161,6 +162,37 @@ export const exportApi = IS_DEMO_MODE ? demoExportApi : {
   // Export resources as CSV or JSON
   exportResources: (params?: { format?: 'json' | 'csv'; status?: string; kind?: string }) =>
     api.get('/resources/export', { params, responseType: 'blob' }),
+};
+
+// RBAC API - no demo mode yet
+export const rbacApi = {
+  // Users
+  listUsers: () => api.get('/rbac/users'),
+  getUser: (id: string) => api.get(`/rbac/users/${id}`),
+  updateUser: (id: string, data: { name?: string; enabled?: boolean }) =>
+    api.put(`/rbac/users/${id}`, data),
+  deleteUser: (id: string) => api.delete(`/rbac/users/${id}`),
+  assignUserRoles: (id: string, roleIds: string[]) =>
+    api.put(`/rbac/users/${id}/roles`, { role_ids: roleIds }),
+  
+  // Roles
+  listRoles: () => api.get('/rbac/roles'),
+  getRole: (id: string) => api.get(`/rbac/roles/${id}`),
+  createRole: (data: { name: string; description: string; permission_ids: string[] }) =>
+    api.post('/rbac/roles', data),
+  updateRole: (id: string, data: { name?: string; description?: string }) =>
+    api.put(`/rbac/roles/${id}`, data),
+  deleteRole: (id: string) => api.delete(`/rbac/roles/${id}`),
+  assignRolePermissions: (id: string, permissionIds: string[]) =>
+    api.put(`/rbac/roles/${id}/permissions`, { permission_ids: permissionIds }),
+  
+  // Permissions
+  listPermissions: () => api.get('/rbac/permissions'),
+};
+
+export const logsApi = IS_DEMO_MODE ? demoLogsApi : {
+  getAggregatedLogs: (params: URLSearchParams) =>
+    api.get(`/logs/aggregated?${params.toString()}`),
 };
 
 export default api;
