@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.4
 
 # Backend builder
-FROM golang:1.25-alpine AS backend-builder
+FROM golang:1.26-alpine AS backend-builder
 WORKDIR /app
 
 # Install build dependencies
